@@ -1,0 +1,69 @@
+{% if research_queries %}
+<section class="final-research" aria-label="Final Research Answer">
+  <h2>Final Research Answer</h2>
+  {% for query in research_queries %}
+    <article class="final-research-result" id="final-answer-{{ query.pk }}">
+      <h3>{{ query.question }}</h3>
+      {% with final=query.final_result result=query.final_result.synthesis_data %}
+      {% if final and result.status == 'completed' %}
+        {% if result.last_attempt_error %}<p class="evidence-error" role="status">A later synthesis attempt failed. The previously accepted answer is shown.</p>{% endif %}
+        <div class="final-answer-text message-content">{{ final.answer }}</div>
+        {% if result.executive_summary %}<p class="final-summary">{{ result.executive_summary }}</p>{% endif %}
+        <div class="final-confidence">
+          <strong>Confidence: {% if final.confidence != None %}{{ final.confidence|floatformat:"-1" }}/100{% else %}Not assessed{% endif %}</strong>
+          <p>The synthesizer's estimate, not a statistical probability. Evidence strength is shown for each finding.</p>
+        </div>
+        <h4>Key Findings</h4>
+        {% for finding in result.key_findings %}
+          <div class="final-finding">
+            <span class="query-status">{{ finding.evidence_strength|capfirst }} evidence</span>
+            <p><strong>{{ finding.claim }}</strong></p>
+            <p>{{ finding.explanation }}</p>
+            {% if diagnostics_enabled and finding.support_review %}<details><summary>Support review: {{ finding.support_review.status }}</summary><p>{{ finding.support_review.note }}</p><p>Diagnostic evidence strength: {{ finding.support_review.diagnostic_evidence_strength }}. Judge-declared strength: {{ finding.declared_evidence_strength }}.</p>{% if finding.support_review.strong_evidence_mismatch %}<p>Strong-evidence mismatch: the cited academic evidence does not meet the configured diagnostic threshold.</p>{% endif %}</details>{% endif %}
+            <details><summary>Supporting sources selected by synthesizer</summary>
+              <p>A source association is not proof that the source supports this claim. Review the source text and its limitations.</p>
+              {% for source in finding.mapped_sources %}<p>[{{ source.source_id }}] {{ source.title }} · {{ source.source_name }}{% if source.year %} · {{ source.year }}{% endif %}{% if source.doi %} · DOI: {{ source.doi }}{% endif %} {% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open source</a>{% endif %}</p>{% empty %}<small>No supporting source attached.</small>{% endfor %}
+            </details>
+          </div>
+        {% empty %}<p>No individual findings were supplied.</p>{% endfor %}
+        <h4>Sources</h4>
+        <ol class="final-sources">
+          {% for source in query.final_sources %}
+            <li id="final-source-{{ query.pk }}-{{ source.source_id }}">
+              <strong>[{{ source.source_id }}] {{ source.title }}</strong>
+              <p>{{ source.source_name }}{% if source.year != None %} · {{ source.year }}{% endif %}</p>
+              {% if source.doi %}<p>DOI: {{ source.doi }}</p>{% endif %}
+              {% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a>{% endif %}
+              {% if source.kind == 'agent' %}<a href="#agent-response-{{ source.agent_response_id }}">View stored AI response</a>{% endif %}
+            </li>
+          {% empty %}<li>No sources were cited by the synthesizer.</li>{% endfor %}
+        </ol>
+        <h4>Agreements / Disagreements</h4>
+        <p class="research-disclaimer">Agreement between AI models is not independent verification.</p>
+        {% if result.agreements %}<h5>Agreements</h5><ul>{% for item in result.agreements %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+        {% if result.disagreements %}<h5>Disagreements</h5><ul>{% for item in result.disagreements %}<li>{{ item }}</li>{% endfor %}</ul>{% else %}<p>No disagreements were reported by the synthesizer.</p>{% endif %}
+        <h4>Limitations</h4>
+        <ul>{% for item in result.limitations %}<li>{{ item }}</li>{% empty %}<li>No specific limitations were reported. This is not a guarantee of completeness.</li>{% endfor %}</ul>
+        {% if result.recommended_interpretation %}<h4>Recommended interpretation</h4><p>{{ result.recommended_interpretation }}</p>{% endif %}
+        {% if diagnostics_enabled %}<details class="synthesis-details">
+          <summary>Evidence preparation details</summary>
+          <p>Priority scores organize the context; they do not decide the answer.</p>
+          <p>{{ result.diagnostics.claim_analysis.method }}</p>
+          {% for paper in result.diagnostics.paper_priorities %}<p>{{ paper.source_id }} · Priority {{ paper.total }}{% for name, value in paper.components.items %} · {{ name }}: {{ value }}{% endfor %}</p>{% endfor %}
+          <p>Omitted papers: {{ result.diagnostics.context_limits.omitted_paper_count }}. Omitted agents: {{ result.diagnostics.context_limits.omitted_agent_count }}.</p>
+          {% for notice in result.diagnostics.context_limits.truncations_and_omissions %}<p>{{ notice.source_id }}: {% if notice.reason %}{{ notice.reason }}{% else %}{{ notice.field }} limited to {{ notice.included_chars }} of {{ notice.original_chars }} characters.{% endif %}</p>{% endfor %}
+        </details>{% endif %}
+      {% elif final %}
+        <div class="evidence-error" role="status">
+          <strong>{% if result.status == 'insufficient_evidence' %}Insufficient evidence{% else %}Final synthesis unavailable{% endif %}</strong>
+          <p>{{ result.error.message }}</p>
+          <p>Any collected model responses and academic evidence remain below.</p>
+        </div>
+      {% else %}
+        <p class="preview-notice">{% if query.status == 'processing' %}Research and final synthesis are processing. Refresh later for the result.{% else %}No final synthesis is stored for this question. Submit it again to run the full research flow.{% endif %}</p>
+      {% endif %}
+      {% endwith %}
+    </article>
+  {% endfor %}
+</section>
+{% endif %}

@@ -1,0 +1,77 @@
+{% for query in research_queries %}
+<section class="research-attempts card p-3 my-3" aria-label="Retry controls and history">
+  <details id="retry-controls-{{ query.pk }}"><summary>Retry controls</summary><h3>{{ query.question }}</h3>
+  <p role="status">Stage: {{ query.stage }}{% if query.execution_data.current_provider %} · {{ query.current_provider_display }} {% if query.is_stale %}interrupted{% else %}still running{% endif %}{% endif %}</p>
+  {% if query.stage == 'PARTIAL' %}<p>Partial research available. Review failures below; retry controls are available.</p>{% endif %}
+  {% if query.is_stale %}<p>This execution appears interrupted. Saved results are intact; the developer can inspect recovery using recover_research.</p>{% endif %}
+  {% if query.execution_data.recovered %}<p>Recovered research: previously successful providers were reused.</p>{% endif %}
+  {% if disabled_providers %}<p>Disabled providers: {{ disabled_providers|join:", " }}.</p>{% endif %}
+  {% for attempt in query.latest_failures %}<p role="status">Latest {{ attempt.normalized_response.label|default:attempt.provider }} attempt failed: {{ attempt.normalized_response.error.message }} Any earlier successful result remains active.</p>{% endfor %}
+  {% if query.synthesis_stale %}<p role="status">Evidence has changed since this final answer was prepared. Re-run Final Synthesis to use the active evidence.</p>{% endif %}
+  {% if query.status == 'processing' %}<p role="status">Processing. Refresh later; retries are unavailable until this request finishes.</p>{% else %}
+  <p class="small">Retries make new API requests and may incur charges. Provider retries preserve the accepted answer; re-run synthesis afterward to incorporate changed evidence.</p>
+  <div class="d-flex gap-2 flex-wrap">
+    {% for model in query.retry_models %}<form class="retry-form" method="post" action="{% url 'chats:retry' query.pk %}">{% csrf_token %}<input type="hidden" name="action_key" value="{{ query.retry_token }}"><input type="hidden" name="target" value="{{ model.label|lower }}"><button class="btn btn-outline-secondary" type="submit">Retry {{ model.display_label|default:model.label }}</button><span class="retry-progress" role="status" hidden>Processing…</span></form>{% endfor %}
+    {% if consensus_enabled %}<form class="retry-form" method="post" action="{% url 'chats:retry' query.pk %}">{% csrf_token %}<input type="hidden" name="action_key" value="{{ query.retry_token }}"><input type="hidden" name="target" value="consensus"><button class="btn btn-outline-secondary" type="submit">Retry Consensus</button><span class="retry-progress" role="status" hidden>Processing…</span></form>{% endif %}
+    <form class="retry-form" method="post" action="{% url 'chats:retry' query.pk %}">{% csrf_token %}<input type="hidden" name="action_key" value="{{ query.retry_token }}"><input type="hidden" name="target" value="failed"><button class="btn btn-outline-secondary" type="submit">Retry Failed Providers</button><span class="retry-progress" role="status" hidden>Processing…</span></form>
+  </div>
+  {% if synthesis_enabled %}<form class="retry-form d-flex gap-2 flex-wrap my-3" method="post" action="{% url 'chats:retry' query.pk %}">
+    {% csrf_token %}<input type="hidden" name="action_key" value="{{ query.retry_token }}"><input type="hidden" name="target" value="synthesis">
+    <label for="judge-{{ query.pk }}">{% if query.deep_selection_enabled %}Synthesizer{% else %}Judge model{% endif %}</label>
+    {% if query.deep_selection_enabled %}<select name="deep_synthesizer" id="judge-{{ query.pk }}" class="form-select w-auto deep-judge-select" aria-describedby="judge-warning-{{ query.pk }}">{% for option in query.deep_judge_options %}<option value="{{ option.key }}" data-warning="{{ option.warning }}" {% if option.id == query.selected_judge_id %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select><small id="judge-warning-{{ query.pk }}" class="muted deep-judge-warning"></small>
+    {% else %}<select name="judge_model" id="judge-{{ query.pk }}" class="form-select w-auto">{% for model in query.judge_models %}<option value="{{ model }}">{{ model }}</option>{% endfor %}</select>{% endif %}
+    <button class="btn btn-outline-primary" type="submit">Re-run Final Synthesis</button><span class="retry-progress" role="status" hidden>Preparing synthesis from saved evidence…</span>
+  </form>{% endif %}
+  {% endif %}
+  </details>
+  <details><summary>Provider attempt history ({{ query.attempt_history|length }})</summary>
+    <p>Active means the latest successful attempt. A newer failure does not replace it.</p>
+    {% for attempt in query.attempt_history %}
+    <details class="border rounded p-2 my-2" id="attempt-{{ attempt.pk }}"><summary>#{{ attempt.pk }} · {{ attempt.normalized_response.label|default:attempt.provider }} · {{ attempt.model_name }} · {{ attempt.created_at }} {% if attempt.is_latest %}· Latest{% endif %}{% if attempt.is_active %} · Active{% endif %} · {% if attempt.normalized_response.error %}Failed{% else %}Succeeded{% endif %}</summary>
+      {% if attempt.normalized_response.error %}<p role="status">{{ attempt.normalized_response.error.message }}</p>{% endif %}
+      {% if attempt.is_displayed %}<p>This attempt is displayed in the {{ attempt.normalized_response.label|default:attempt.provider }} results above.</p>{% else %}<span id="agent-response-{{ attempt.pk }}"></span>
+      <div class="message-content">{{ attempt.normalized_response.answer }}</div>
+      <ul>{% for finding in attempt.normalized_response.key_findings %}<li>{{ finding }}</li>{% endfor %}</ul>
+      <p>Confidence: {{ attempt.confidence|default_if_none:"Unknown" }}</p>
+      {% for paper in attempt.normalized_response.papers %}<details><summary>{{ paper.title }}</summary><p>{{ paper.journal }} · {{ paper.year|default_if_none:"Unknown year" }}</p><p>{{ paper.abstract }}</p><p>{{ paper.takeaway }}</p>{% if paper.url %}<a href="{{ paper.url }}" target="_blank" rel="noopener noreferrer">Open paper</a>{% endif %}</details>{% endfor %}
+      {% for citation in attempt.normalized_response.citations %}<p>{{ citation.title }} {% if citation.url %}<a href="{{ citation.url }}" target="_blank" rel="noopener noreferrer">Open citation</a>{% endif %}</p>{% endfor %}
+      {% endif %}
+    </details>{% empty %}<p>No provider attempts.</p>{% endfor %}
+  </details>
+  <details class="mt-3"><summary>Synthesis history ({{ query.judge_history|length }})</summary>
+    {% for attempt in query.judge_history %}
+    <details class="border rounded p-2 my-2"><summary>#{{ attempt.pk }} · {{ attempt.judge_label }} · {{ attempt.created_at }} · {% if attempt.succeeded %}Succeeded{% else %}Failed{% endif %}{% if forloop.first %} · Latest{% endif %}{% if query.final_result.active_attempt_id == attempt.pk %} · Active / latest accepted{% endif %}</summary>
+      <p>Model: {{ attempt.model_name }} · Latency: {{ attempt.latency_ms|default_if_none:'Unknown' }} ms · Estimated cost: {{ attempt.estimated_cost|default_if_none:'Unknown' }} USD</p>
+      <p>{{ attempt.synthesis_data.error.message }}</p><div class="message-content">{{ attempt.answer }}</div>
+      {% if diagnostics_enabled %}<p>Rejected source IDs: {{ attempt.synthesis_data.validation.rejected_source_ids|join:", "|default:"None recorded" }}</p>{% endif %}
+      <p>Confidence: {{ attempt.confidence|default_if_none:"Unknown" }}</p>
+      <p>{{ attempt.synthesis_data.executive_summary }}</p>
+      {% for finding in attempt.synthesis_data.key_findings %}<p><strong>{{ finding.claim }}</strong> · {{ finding.evidence_strength }}</p><p>{{ finding.explanation }}</p><p>Supporting sources selected by synthesizer: {{ finding.supporting_source_ids|join:", " }}</p>{% endfor %}
+      {% for source in attempt.synthesis_data.sources %}<p>[{{ source.source_id }}] {{ source.title }} · {{ source.source_name }} {% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open source</a>{% endif %}</p>{% endfor %}
+      <p>Agreements: {{ attempt.synthesis_data.agreements|join:"; " }}</p><p>Disagreements: {{ attempt.synthesis_data.disagreements|join:"; " }}</p><p>Limitations: {{ attempt.synthesis_data.limitations|join:"; " }}</p><p>{{ attempt.synthesis_data.recommended_interpretation }}</p>
+    </details>{% empty %}<p>No synthesis attempts.</p>{% endfor %}
+  </details>
+  {% if diagnostics_enabled %}
+  {% if query.status != 'processing' and query.status != 'pending' %}
+  <details class="mt-3"><summary>Developer evaluation (manual)</summary>
+    <p>Ratings do not affect synthesis. Rate the active answer and evidence you reviewed.</p>
+    {% if query.latest_rating %}<p>Latest rating: answer {{ query.latest_rating.answer_quality }}/5; citations {{ query.latest_rating.citation_quality }}/5; relevance {{ query.latest_rating.evidence_relevance }}/5; synthesis {{ query.latest_rating.synthesis_quality }}/5. {{ query.latest_rating.notes }}</p>{% endif %}
+    <form method="post" action="{% url 'chats:rate' query.pk %}">{% csrf_token %}<input type="hidden" name="synthesis_attempt" value="{{ query.final_result.active_attempt_id|default_if_none:'' }}">{{ query.rating_form.as_p }}<button type="submit" class="btn btn-outline-secondary">Save manual evaluation</button></form>
+  </details>
+  {% endif %}
+  <details class="mt-3"><summary>Developer diagnostics</summary>
+    {% if query.synthesis_failure %}<p>Synthesis failure: {{ query.synthesis_failure.error.message }} · {{ query.synthesis_failure.error.code }} · {{ query.synthesis_failure.error.category }}{% if query.synthesis_failure.failure_stage %} · {{ query.synthesis_failure.failure_stage }}{% endif %}{% if query.synthesis_failure.error.http_status %} · HTTP {{ query.synthesis_failure.error.http_status }}{% endif %}</p><p>Model: {{ query.synthesis_failure.model }}. Rejected source IDs: {{ query.synthesis_failure.validation.rejected_source_ids|join:', '|default:'None recorded' }}.</p>{% endif %}
+    {% if query.execution_data.duration_incomplete %}<p>Interrupted execution: total duration includes completed operations only. Time and charges for an interrupted unsaved request may be unknown.</p>{% endif %}
+    {% for warning in query.final_result.synthesis_data.diagnostics.evidence_thresholds.warnings %}<p>{{ warning }}</p>{% endfor %}
+    <p>Provider counts describe latest attempts; evidence and answer metrics describe active results. Duration and costs include all attempts, including retries. Cost is USD, OpenRouter only; Consensus billing is not estimated. Unknown is not zero.</p>
+    <dl>{% for name, value in query.metrics.items %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"Unknown / not applicable" }}</dd>{% endfor %}</dl>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Attempt / model</th><th>Success</th><th>Latency ms</th><th>Input / output / total tokens</th><th>Cost USD</th><th>Error</th></tr></thead><tbody>
+    {% for attempt in query.attempt_history %}{% include "research/metric_row.html" %}{% endfor %}
+    {% for attempt in query.judge_history %}{% include "research/metric_row.html" %}{% endfor %}
+    </tbody></table></div>
+    <p>Judge: {{ query.final_result.synthesis_data.model }}. Papers used: {{ query.final_result.synthesis_data.diagnostics.paper_priorities|length }}. Papers omitted by limit: {{ query.final_result.synthesis_data.diagnostics.context_limits.omitted_paper_count|default_if_none:"Unknown" }}.</p>
+    <p>Rejected source IDs: {{ query.final_result.synthesis_data.validation.rejected_source_ids|join:", "|default:"None recorded" }}</p>
+  </details>
+  {% endif %}
+</section>
+{% endfor %}

@@ -1,0 +1,39 @@
+<article class="research-snapshot" id="snapshot-{{ query.pk }}">
+  <header class="question-header"><p class="eyebrow">RESEARCH QUESTION</p><h1>{{ query.question }}</h1><p class="muted">{{ query.created_at|date:"M j, Y · H:i" }} <span class="query-status">{{ query.stage }}</span></p></header>
+  {% with final=query.final_result result=query.final_result.synthesis_data %}
+  <section class="snapshot-card" aria-label="Final research snapshot">
+    <p class="eyebrow">30-SECOND VIEW</p><h2>Final Research Answer</h2>
+    {% if final and result.status == 'completed' %}
+      {% if result.last_attempt_error %}<p role="status">A later synthesis attempt failed. The previously accepted answer is shown.</p>{% endif %}
+      {% if query.synthesis_stale %}<p role="status">Evidence has changed since this answer was prepared. Re-run synthesis to use the active evidence.</p>{% endif %}
+      <div class="answer-preview message-content">{{ final.answer|truncatechars:650 }}</div>
+      {% if final.answer|length > 650 %}<details><summary>Read full answer</summary><div class="message-content">{{ final.answer }}</div></details>{% endif %}
+      {% if result.executive_summary %}<details><summary>Executive summary</summary><p>{{ result.executive_summary }}</p></details>{% endif %}
+      <div class="quick-actions"><button type="button" class="btn btn-outline-secondary" data-copy="copy-answer-{{ query.pk }}">Copy Final Answer</button><span id="copy-answer-{{ query.pk }}" hidden>{{ final.answer }}</span><button type="button" class="btn btn-outline-secondary" data-copy="sources-{{ query.pk }}">Copy Sources</button>
+      {% if synthesis_enabled and query.status != 'processing' %}<form class="retry-form" method="post" action="{% url 'chats:retry' query.pk %}">{% csrf_token %}<input type="hidden" name="action_key" value="{{ query.retry_token }}"><input type="hidden" name="target" value="synthesis"><button class="btn btn-outline-secondary" type="submit">Re-run Synthesis</button><span class="retry-progress" role="status" hidden>Preparing synthesis…</span></form>{% endif %}<span class="future-export">Export Research · coming later</span></div>
+    {% elif query.status == 'processing' or query.status == 'pending' %}<p role="status">Researching across multiple models and academic evidence...</p>
+    {% else %}<p role="status">Final synthesis unavailable. Collected research is still available.</p>{% endif %}
+    {% if query.stage == 'PARTIAL' or query.latest_failures %}<p role="status">Partial research available</p>{% endif %}
+    {% if query.synthesis_failure %}<div class="evidence-error" role="status"><strong>Synthesis could not complete</strong><p>{{ query.synthesis_failure.error.message }}</p><small>Reason: {{ query.synthesis_failure.error.code }}{% if query.synthesis_failure.error.http_status %} · HTTP {{ query.synthesis_failure.error.http_status }}{% endif %}</small><p><a href="#retry-controls-{{ query.pk }}">Review and re-run synthesis</a></p></div>{% elif result.error %}<p class="evidence-error" role="status">{{ result.error.message }}</p>{% endif %}
+    {% for attempt in query.latest_failures %}<p class="muted">{{ attempt.normalized_response.label|default:attempt.provider }}: {{ attempt.normalized_response.error.message|truncatechars:200 }} <a href="#retry-controls-{{ query.pk }}">Retry</a></p>{% endfor %}
+    <div class="metric-grid">
+      <div><small>Overall confidence</small><strong>{% if final and final.confidence != None %}{{ final.confidence|floatformat:'-1' }}%{% else %}Not assessed{% endif %}</strong><small title="Not a statistical probability">Synthesizer confidence estimate</small></div>
+      <div><small>Evidence strength</small><strong>{{ query.evidence_label }}</strong><small>Lowest reported finding strength; conflicts take precedence</small></div>
+      <div><small>Academic papers</small><strong>{{ query.ranked_papers|length }} papers</strong></div>
+      <div><small>AI agents</small><strong>{{ query.active_agent_count }}/3 successful</strong><small>Active saved responses</small></div>
+      <div><small>Consensus</small><strong>{{ query.consensus_available|yesno:'Available,Unavailable' }}</strong></div>
+    </div>
+  </section>
+  <section class="reading-section"><p class="eyebrow">2-MINUTE VIEW</p><h2>Key Findings</h2>
+    {% for finding in result.key_findings|slice:':5' %}{% include 'research/finding_card.html' %}{% empty %}<p>No individual findings are available yet.</p>{% endfor %}
+    {% if result.key_findings|length > 5 %}<details><summary>View all findings ({{ result.key_findings|length }})</summary>{% for finding in result.key_findings|slice:'5:' %}{% include 'research/finding_card.html' %}{% endfor %}</details>{% endif %}
+  </section>
+  <section class="evidence-overview"><h2>Evidence Overview</h2><p>{{ query.valid_source_count }} valid sources · {{ query.conflicting_findings }} conflicting findings · {{ result.disagreements|length }} disagreements · {{ query.ranked_papers|length }} papers reviewed</p><p class="muted">The metrics above describe saved evidence. Source associations and agreement between models are not independent verification.</p></section>
+  <section class="reading-section"><h2>Best Academic Evidence</h2><p class="muted">Saved synthesis ranking where available; otherwise Consensus order. Retrieved papers are not automatically proof of a claim.</p>
+    {% for paper in query.ranked_papers|slice:':3' %}{% include 'research/paper_preview.html' %}{% empty %}<p>No academic papers were returned for this query.</p>{% endfor %}
+    {% if query.ranked_papers|length > 3 %}<details><summary>View all papers ({{ query.ranked_papers|length }})</summary>{% for paper in query.ranked_papers|slice:'3:' %}{% include 'research/paper_preview.html' %}{% endfor %}</details>{% endif %}
+  </section>
+  <section class="reading-section uncertainty"><h2>Disagreements &amp; Limitations</h2><h3>Disagreements</h3><ul>{% for item in result.disagreements %}<li>{{ item }}</li>{% empty %}<li>No major disagreement identified.{% if not final %} Synthesis has not completed.{% endif %}</li>{% endfor %}</ul><h3>Limitations</h3><ul>{% for item in result.limitations %}<li>{{ item }}</li>{% empty %}<li>No specific limitations reported. This does not establish completeness or certainty.</li>{% endfor %}</ul></section>
+  <section class="reading-section"><h2>Sources</h2><div id="sources-{{ query.pk }}">{% for source in query.final_sources %}<div class="source-card"><strong>[{{ source.source_id }}] {{ source.title }}</strong><p>{{ source.source_name }} {% if source.year %}· {{ source.year }}{% endif %}{% if source.doi %} · DOI: {{ source.doi }}{% endif %}</p>{% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open source</a><span class="copy-source-url" hidden>{{ source.url }}</span>{% endif %}{% if source.kind == 'agent' %}<a href="#agent-response-{{ source.agent_response_id }}">View stored AI response</a>{% endif %}</div>{% empty %}<p>No sources were cited by the synthesizer.</p>{% endfor %}</div></section>
+  {% endwith %}
+</article>

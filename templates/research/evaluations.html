@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="container py-4">
+  <a href="{% url 'chats:dashboard' %}">Back to research</a>
+  <h1>Manual evaluation</h1>
+  <p>These diagnostics do not score factual correctness. Each Run case button starts a full live research request using configured credentials and may incur API charges.</p>
+  {% for case in cases %}
+  <details class="card p-3 mb-3"><summary>{{ case.category }} — {{ case.question }}</summary>
+    <p>Expected topics: {{ case.expected_topics|join:", " }}</p>
+    <p>Important sources: {{ case.important_sources|join:", " }}</p><p>{{ case.notes }}</p>
+    <form method="post" action="{% url 'chats:run_evaluation' forloop.counter0 %}" class="retry-form">{% csrf_token %}<input type="hidden" name="submission_key" value="{{ case.submission_key }}"><button class="btn btn-outline-primary" type="submit">Run case (live APIs)</button><span class="retry-progress" role="status" hidden>Researching… Keep this page open.</span></form>
+  </details>
+  {% endfor %}
+  <h2>Compare research runs</h2>
+  <form method="get" class="my-3"><label for="question-filter">Question contains</label> <input id="question-filter" name="question" value="{{ question_filter }}" maxlength="2000"><button type="submit" class="btn btn-outline-secondary">Filter</button></form>
+  <p>Latest 100 matching runs. Ratings are manual developer observations, never input to synthesis. Costs and latency include all attempts; models lists include historical attempts.</p>
+  <div class="table-responsive"><table class="table"><thead><tr><th>Question / run</th><th>Models used</th><th>Latest judge</th><th>Cost USD</th><th>Latency ms</th><th>Active papers</th><th>Latest manual ratings</th></tr></thead><tbody>
+  {% for query in results %}<tr><td><a href="{% url 'chats:detail' query.chat_id %}">#{{ query.pk }} {{ query.question }}</a><p>{{ query.stage }}</p></td><td>{{ query.models_used|join:", " }}</td><td>{{ query.judge_used.model_name|default:"Not run" }}</td><td>{{ query.metrics.total_estimated_openrouter_cost|default_if_none:"Unknown" }}</td><td>{{ query.metrics.total_duration_ms|default_if_none:"Unknown" }}</td><td>{{ query.metrics.paper_count }}</td><td>{% if query.latest_rating %}Answer {{ query.latest_rating.answer_quality }}/5; citations {{ query.latest_rating.citation_quality }}/5; relevance {{ query.latest_rating.evidence_relevance }}/5; synthesis {{ query.latest_rating.synthesis_quality }}/5<p>{{ query.latest_rating.notes }}</p><small>Reviewed synthesis attempt #{{ query.latest_rating.synthesis_attempt_id|default:"none" }}</small>{% else %}Not rated{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <h2>Run diagnostics</h2>
+  {% for query in results %}
+  <details class="card p-3 mb-3"><summary>{{ query.evaluation_case.category }} · {{ query.created_at }} · {{ query.status }}</summary>
+    <a href="{% url 'chats:detail' query.chat_id %}">{{ query.question }}</a>
+    <dl>{% for name, value in query.metrics.items %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"Unknown / not applicable" }}</dd>{% endfor %}</dl>
+  </details>
+  {% empty %}<p>No evaluation runs yet.</p>{% endfor %}
+</main>
+{% endblock %}

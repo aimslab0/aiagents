@@ -1,0 +1,57 @@
+{% if research_queries %}
+<section class="agent-research" aria-label="AI Agent Research">
+  <h2>AI Agent Research</h2>
+  <p class="research-disclaimer">Independent model answers. Citations and confidence are reported by each model; sources have not been independently verified.</p>
+  {% for query in research_queries %}
+    <section class="research-run" aria-labelledby="research-{{ query.pk }}">
+      <div class="research-run-header">
+        <h3 id="research-{{ query.pk }}">{{ query.question }}</h3>
+        <span class="query-status status-{{ query.status }}">{{ query.get_status_display }}</span>
+      </div>
+      {% if query.status == 'processing' %}
+        <p class="preview-notice" role="status">Research is processing. Refresh this chat later to see saved results.</p>
+      {% elif query.status == 'failed' %}
+        <p class="preview-notice">No research provider completed successfully. Details are shown below.</p>
+      {% elif query.status == 'completed' %}
+        <p class="preview-notice">Research finished. Any provider failures are shown in their sections.</p>
+      {% endif %}
+      {% for agent in query.ai_responses %}
+        {% with result=agent.normalized_response %}
+        <details id="agent-response-{{ agent.pk }}" class="agent-card {% if result.error %}agent-error{% endif %}">
+          <summary>
+            <span class="agent-label">{{ result.label|default:agent.model_name }}</span>
+            <span class="agent-model">{{ agent.model_name }}</span>
+            <span class="agent-outcome">{% if result.error %}Failed{% else %}View response{% endif %}</span>
+          </summary>
+          <div class="agent-card-body">
+            {% if result.error %}
+              <p class="agent-error-message" role="status">{{ result.error.message }}</p>
+            {% else %}
+              <h4>Answer</h4>
+              <div class="message-content">{{ result.answer }}</div>
+              {% if result.key_findings %}
+                <h4>Key findings</h4>
+                <ul>{% for finding in result.key_findings %}<li>{{ finding }}</li>{% endfor %}</ul>
+              {% endif %}
+              {% if result.evidence %}
+                <h4>Evidence and limitations</h4>
+                <ul>{% for item in result.evidence %}<li>{{ item }}</li>{% endfor %}</ul>
+              {% endif %}
+              <p class="agent-confidence">Self-reported confidence: <strong>{% if agent.confidence != None %}{{ agent.confidence|floatformat:"-1" }}/100{% else %}Not assessed{% endif %}</strong></p>
+              <h4>Citations</h4>
+              <ul class="agent-citations">
+                {% for citation in result.citations %}
+                  <li>{% if citation.url %}<a href="{{ citation.url }}" target="_blank" rel="noopener noreferrer">{{ citation.title|default:citation.url }}</a>{% else %}{{ citation.title }}{% endif %}{% if citation.source_name %} — {{ citation.source_name }}{% endif %}</li>
+                {% empty %}<li>No sources supplied by this model.</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        </details>
+        {% endwith %}
+      {% empty %}
+        {% if query.status == 'pending' %}<p class="preview-notice">This saved question has not been researched. Submit it again to run the models.</p>{% endif %}
+      {% endfor %}
+    </section>
+  {% endfor %}
+</section>
+{% endif %}

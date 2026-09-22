@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{% if selected_chat %}{{ selected_chat.title }} · {% endif %}Multi AI Research{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar" aria-label="Research history">
+    <a href="{% url 'chats:dashboard' %}" class="brand"><span class="brand-mark" aria-hidden="true">✳</span> Multi AI Research</a>
+    <form method="post" action="{% url 'chats:new' %}" class="new-chat-form">
+      {% csrf_token %}
+      <button type="submit" class="btn new-chat w-100"><span aria-hidden="true">＋</span> New Research</button>
+    </form>
+    <label for="chat-search" class="visually-hidden">Search chats</label><input type="search" id="chat-search" class="form-control" placeholder="Search chats">
+    <h2 class="sidebar-label">YOUR RESEARCH</h2>
+    <nav class="history" aria-label="Saved chats">
+      {% for chat in chats %}<div class="history-row" data-chat-title="{{ chat.title }}">
+        <a href="{% url 'chats:detail' chat.pk %}" class="history-item {% if selected_chat.pk == chat.pk %}active{% endif %}" {% if selected_chat.pk == chat.pk %}aria-current="page"{% endif %}>
+          <span class="history-title">{{ chat.title }}</span>
+          <small>{{ chat.updated_at|date:"M j" }}</small>
+        </a>
+        <details class="chat-menu"><summary aria-label="Actions for {{ chat.title }}">⋯</summary><div>
+          <button type="button" data-chat-action="rename" data-title="{{ chat.title }}" data-url="{% url 'chats:rename' chat.pk %}">Rename</button>
+          <button type="button" data-chat-action="delete" data-title="{{ chat.title }}" data-chat-id="{{ chat.pk }}" data-url="{% url 'chats:delete' chat.pk %}">Delete</button>
+        </div></details></div>
+      {% empty %}
+        <p class="history-empty">Your research starts here.<br>Saved chats will appear in this space.</p>
+      {% endfor %}
+    </nav><p id="no-chat-matches" hidden>No matching research.</p>
+    <div class="sidebar-footer"><label for="theme-select">Appearance</label><select id="theme-select" class="form-select"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><button class="btn btn-sm btn-outline-secondary mt-3" type="button" data-chat-action="clear" data-url="{% url 'chats:clear' %}">Clear All Chats</button></div>
+  </aside>
+  <main class="main-panel" id="main-content">
+    <header class="topbar">
+      <button type="button" id="sidebar-toggle" class="btn sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Toggle research history">☰</button>
+      <span class="topbar-title">{% if selected_chat %}{{ selected_chat.title }}{% else %}Research workspace{% endif %}</span>
+      <span class="foundation-badge">{% if free_test_mode %}FREE TEST MODE{% else %}PRODUCTION MODE{% endif %}</span>
+    </header>
+    <section class="conversation" id="conversation" aria-label="Conversation" tabindex="0">
+      <div class="conversation-inner">
+      {% if research_queries %}
+        {% for query in research_queries %}
+          {% include "research/snapshot.html" %}
+          <details class="advanced-research"><summary>View Detailed Research</summary>
+            {% include "research/configuration.html" with configured_models=query.run_models configured_judge=query.selected_judge_id %}
+            {% with research_queries=query.ui_singleton %}
+              <details><summary>Individual AI responses</summary>{% include "research/agent_research.html" %}</details>
+              <details><summary>Full Consensus Evidence</summary>{% include "research/academic_evidence.html" %}</details>
+              <details><summary>Judge/Synthesizer details</summary>{% include "research/final_answer.html" %}</details>
+              {% include "research/attempts.html" %}
+            {% endwith %}
+          </details>
+        {% endfor %}
+        <details class="advanced-research"><summary>Conversation history</summary>{% for message in chat_messages %}<article class="message"><strong>{{ message.get_role_display }}</strong><div class="message-content">{{ message.content }}</div></article>{% endfor %}</details>
+      {% else %}
+        <div class="welcome">
+          <span class="welcome-mark" aria-hidden="true">✳</span>
+          <p class="eyebrow">A SPACE FOR BETTER QUESTIONS</p>
+          <h1>Start a new research question</h1><p>What would you like to understand?</p>
+          <p class="welcome-description">Start with a question. Keep your research in one place.<br>Build toward answers grounded in evidence.</p>
+          <div class="example-grid">
+            <div class="example-card"><span>01 / EXPLORE</span><p>How does sleep affect<br>long-term memory?</p></div>
+            <div class="example-card"><span>02 / COMPARE</span><p>How do solar and wind energy<br>compare in urban settings?</p></div>
+            <div class="example-card"><span>03 / UNDERSTAND</span><p>What influences the adoption<br>of new technologies?</p></div>
+          </div>
+        </div>
+      <details class="advanced-research"><summary>View Detailed Research</summary>{% include "research/configuration.html" %}</details>
+      {% endif %}
+      </div>
+    </section>
+    <div class="composer-wrap">
+      <form method="post" id="question-form" class="composer" action="{% if selected_chat %}{% url 'chats:submit_to_chat' selected_chat.pk %}{% else %}{% url 'chats:submit' %}{% endif %}">
+        {% csrf_token %}
+        <div class="d-flex gap-2 flex-wrap mb-2" id="research-options" data-free-test="{{ free_test_mode|yesno:'true,false' }}">
+          <div><label for="id_research_mode">Research mode</label>{{ form.research_mode }}</div>
+          <div id="deep-synthesizer-control" {% if not show_deep_selector %}hidden{% endif %}><label for="id_deep_synthesizer">Synthesizer</label>{{ form.deep_synthesizer }}<small id="deep-synthesizer-warning" class="muted"></small></div>
+        </div>
+        {{ form.research_mode.errors }}{{ form.deep_synthesizer.errors }}{{ form.non_field_errors }}
+        {{ deep_synthesizer_options|json_script:'deep-synthesizer-options' }}
+        <label for="id_question" class="visually-hidden">Research question</label>
+        {{ form.question }}
+        {{ form.submission_key }}
+        {% if form.question.errors %}<div class="text-danger small px-2" role="alert">{{ form.question.errors }}</div>{% endif %}
+        <div class="composer-actions"><span>One question. A starting point.</span><button type="submit" class="btn research-button">Research <span aria-hidden="true">↑</span></button></div>
+      </form>
+      <p id="research-progress" class="research-progress" role="status" aria-live="polite" hidden><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Researching across multiple models and academic evidence... This may take a few minutes. Keep this page open.</p>
+      <p id="composer-help" class="composer-help">Three AI perspectives + academic evidence · Check sources before relying on them</p>
+    </div>
+  </main>
+</div>
+{% include "chats/management.html" %}
+{% endblock %}

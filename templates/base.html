@@ -1,0 +1,18 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="{% static 'js/theme.js' %}?v=20260922-2"></script>
+  <title>{% block title %}Multi AI Research{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link href="{% static 'css/dashboard.css' %}" rel="stylesheet">
+  <link href="{% static 'css/research-workspace.css' %}?v=20260922-2" rel="stylesheet">
+  <script src="{% static 'js/dashboard.js' %}?v=20260922-deep" defer></script>
+</head>
+<body>
+  <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to conversation</a>
+  {% block content %}{% endblock %}
+</body>
+</html>
