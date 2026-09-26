@@ -28,7 +28,7 @@ class SafeConsoleFormatter(logging.Formatter):
             safe.exc_text = None
             safe.stack_info = None
         result = super().format(safe)
-        for name in ("SECRET_KEY", "OPENROUTER_API_KEY", "CONSENSUS_API_KEY"):
+        for name in ("SECRET_KEY", "OPENROUTER_API_KEY", "CONSENSUS_API_KEY", "SEMANTIC_SCHOLAR_API_KEY"):
             secret = getattr(settings, name, "")
             if secret:
                 result = result.replace(secret, "[REDACTED]")

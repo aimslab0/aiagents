@@ -1,7 +1,7 @@
 {% if research_queries %}
 <section class="agent-research" aria-label="AI Agent Research">
   <h2>AI Agent Research</h2>
-  <p class="research-disclaimer">Independent model answers. Citations and confidence are reported by each model; sources have not been independently verified.</p>
+  <p class="research-disclaimer">Independent model outputs. Planners propose searches and hypotheses, not evidence. Citations and confidence in historical answers are model-reported and unverified.</p>
   {% for query in research_queries %}
     <section class="research-run" aria-labelledby="research-{{ query.pk }}">
       <div class="research-run-header">
@@ -27,16 +27,17 @@
             {% if result.error %}
               <p class="agent-error-message" role="status">{{ result.error.message }}</p>
             {% else %}
-              <h4>Answer</h4>
+              <h4>{% if result.plan %}Problem interpretation{% else %}Answer{% endif %}</h4>
               <div class="message-content">{{ result.answer }}</div>
               {% if result.key_findings %}
-                <h4>Key findings</h4>
+                <h4>{% if result.plan %}Search queries (not evidence){% else %}Key findings{% endif %}</h4>
                 <ul>{% for finding in result.key_findings %}<li>{{ finding }}</li>{% endfor %}</ul>
               {% endif %}
               {% if result.evidence %}
                 <h4>Evidence and limitations</h4>
                 <ul>{% for item in result.evidence %}<li>{{ item }}</li>{% endfor %}</ul>
               {% endif %}
+              {% if result.plan %}<details><summary>Planner diagnostics</summary><dl>{% for key, value in result.plan.items %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></details>{% endif %}
               <p class="agent-confidence">Self-reported confidence: <strong>{% if agent.confidence != None %}{{ agent.confidence|floatformat:"-1" }}/100{% else %}Not assessed{% endif %}</strong></p>
               <h4>Citations</h4>
               <ul class="agent-citations">

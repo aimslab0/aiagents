@@ -1,7 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 
 
-# Balanced defaults; Claude catalog pricing and JSON-schema endpoints verified 2026-09-22.
+# Internal slot identities preserve historical retry/budget keys.
 PRODUCTION_RESEARCH_SLOTS = ("GPT", "Gemini", "Claude")
 PRODUCTION_MODEL_DEFAULTS = {
     "GPT": "openai/gpt-6-astra",
@@ -10,26 +10,28 @@ PRODUCTION_MODEL_DEFAULTS = {
     "synthesis": "anthropic/claude-fable-5.1",
 }
 
+# Plan-and-Solve models and structured outputs verified in the public catalog 2026-09-25.
 BALANCED_MODEL_DEFAULTS = {
-    "GPT": "openai/gpt-6-astra",
-    "Gemini": "google/gemini-3.1-pro-preview",
-    "Claude": "qwen/qwen3.8-max-0902",
-    "synthesis": "x-ai/grok-4.20",
+    "GPT": "google/gemini-3.5-flash",
+    "Gemini": "meta-llama/llama-4-scout",
+    "Claude": "qwen/qwen3.5-27b",
+    "synthesis": "deepseek/deepseek-v4-flash",
 }
+ALTERNATIVE_SYNTHESIZER_DEFAULT = "openai/o4-mini"
 
 DEEP_JUDGE_DEFAULTS = {
-    "gpt": ("openai/gpt-6-astra", "GPT-6 Astra", "Premium reasoning model"),
-    "claude": ("anthropic/claude-fable-5.1", "Claude Fable 5.1", "Premium synthesizer — higher API cost"),
-    "grok": ("x-ai/grok-4.20", "Grok 4.20", "Lower-cost deep synthesis option"),
+    "deepseek": ("deepseek/deepseek-r1", "DeepSeek R1", "Lower-cost reasoning"),
+    "claude": ("anthropic/claude-sonnet-5", "Claude Sonnet 5", "Large-context academic synthesis"),
 }
 
 
 def deep_judges(environment):
-    default = environment.get("DEEP_DEFAULT_SYNTHESIZER", "gpt").strip().lower()
+    default = environment.get("DEEP_DEFAULT_SYNTHESIZER", "deepseek").strip().lower()
     if default not in DEEP_JUDGE_DEFAULTS:
-        raise ImproperlyConfigured("DEEP_DEFAULT_SYNTHESIZER must be gpt, claude or grok.")
+        raise ImproperlyConfigured("DEEP_DEFAULT_SYNTHESIZER must be deepseek or claude.")
     choices = [{"key": key, "id": environment.get(f"DEEP_SYNTHESIZER_{key.upper()}_MODEL", "").strip() or model,
-                "label": label, "warning": warning} for key, (model, label, warning) in DEEP_JUDGE_DEFAULTS.items()]
+                "label": label, "warning": warning,
+                "response_format": 'json_object' if key == 'deepseek' else 'json_schema'} for key, (model, label, warning) in DEEP_JUDGE_DEFAULTS.items()]
     return choices, default
 
 
@@ -40,10 +42,10 @@ def configure_production(environment):
     models = []
     for label in PRODUCTION_RESEARCH_SLOTS:
         if mode == "balanced":
-            suffix = "THIRD" if label == "Claude" else label.upper()
-            model_id = environment.get(f"BALANCED_{suffix}_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS[label]
+            index = PRODUCTION_RESEARCH_SLOTS.index(label) + 1
+            model_id = environment.get(f"PLANNER_MODEL_{index}", "").strip() or BALANCED_MODEL_DEFAULTS[label]
             # Preserve the existing internal retry/budget slot; use truthful UI labels.
-            display = {"GPT": "GPT-6 Astra", "Gemini": "Gemini 3.1 Pro Preview", "Claude": "Qwen3.8 Max"}[label]
+            display = {"GPT": "Planner 1 — Gemini 3.5 Flash", "Gemini": "Planner 2 — Llama 4 Scout", "Claude": "Planner 3 — Qwen3.5-27B"}[label]
             if model_id != BALANCED_MODEL_DEFAULTS[label]:
                 display = model_id
             models.append({"label": label, "display_label": display, "id": model_id})
@@ -51,7 +53,7 @@ def configure_production(environment):
             model_id = environment.get(f"DEEP_{label.upper()}_MODEL", "").strip() or production_model(environment, label)
             models.append({"label": label, "id": model_id})
     choices, default = deep_judges(environment)
-    judge = (environment.get("BALANCED_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS["synthesis"]) if mode == "balanced" else next(option["id"] for option in choices if option["key"] == default)
+    judge = (environment.get("PRIMARY_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS["synthesis"]) if mode == "balanced" else next(option["id"] for option in choices if option["key"] == default)
     return models, judge
 
 

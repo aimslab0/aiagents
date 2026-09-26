@@ -29,7 +29,7 @@ class LeaseLost(Exception):
 
 
 def lease_deadline():
-    longest = max(budget_for(key)["timeout"] for key in ("gpt", "claude", "gemini", "consensus", "synthesis"))
+    longest = max(budget_for(key)["timeout"] for key in ("gpt", "claude", "gemini", "consensus", "semantic_scholar", "synthesis"))
     return timezone.now() + timedelta(seconds=max(settings.RESEARCH_STALE_AFTER_SECONDS, longest + max(settings.OPENROUTER_CONNECT_TIMEOUT, settings.CONSENSUS_CONNECT_TIMEOUT) + 60))
 
 
@@ -62,6 +62,9 @@ def claim(query, plan, mode="initial", action_key=None, action_target="", model_
             "claimed_at": now.isoformat()}
     if query.execution_data.get("selection") is not None:
         data["selection"] = query.execution_data["selection"]
+    for field in ('research_plan', 'hybrid_diagnostics', 'merged_evidence'):
+        if field in query.execution_data:
+            data[field] = query.execution_data[field]
     if not available.update(status="processing", stage="COLLECTING_AGENTS", execution_token=token,
                             lease_expires_at=lease_deadline(), execution_data=data, completed_at=None):
         if mode == "initial":

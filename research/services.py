@@ -13,7 +13,7 @@ from .synthesis import synthesize_research
 from .metrics import ExecutionTimer, select_attempts, succeeded
 from agents.budgets import budget_for, enabled_providers
 from .execution import claim, ownership, touch, persistence_guard, retry_call, ResearchBusy, LeaseLost
-from .configuration import run_models, selected_judge, allowed_judges
+from .configuration import run_models, selected_judge, allowed_judges, is_plan_and_solve, providers_for
 
 
 def run_model(client, question, model_id):
@@ -32,7 +32,7 @@ def run_model(client, question, model_id):
 
 
 def run_research(query, client=None, consensus_client=None, synthesis_client=None):
-    plan = {"targets": enabled_providers(), "synthesis": budget_for("synthesis")["enabled"], "judge_model": selected_judge(query)}
+    plan = {"targets": providers_for(query), "synthesis": budget_for("synthesis")["enabled"], "judge_model": selected_judge(query)}
     token = claim(query, plan)
     if token is None:
         query.refresh_from_db()
@@ -46,7 +46,7 @@ def run_agent(query, model, client=None):
 
 def _run_agent(query, model, client=None):
     timer = ExecutionTimer()
-    result = run_model(client or OpenRouterClient(provider_key=model["label"].lower()), query.question, model["id"])
+    result = run_model(client or OpenRouterClient(provider_key=model["label"].lower(), planner=is_plan_and_solve(query)), query.question, model["id"])
     result["label"] = model.get("display_label", model["label"])
     with persistence_guard(query):
         return AgentResponse.objects.create(
@@ -64,13 +64,23 @@ def execute_plan(query, token, client=None, consensus_client=None, synthesis_cli
     with ownership(query, token):
         try:
             for key in plan.get("targets", []):
-                if key not in enabled_providers():
+                if key not in providers_for(query):
                     continue
                 touch(query, "COLLECTING_CONSENSUS" if key == "consensus" else "COLLECTING_AGENTS", key)
-                if key == "consensus":
+                if is_plan_and_solve(query) and key in {"consensus", "semantic_scholar"}:
+                    from .planning import save_plan
+                    from .hybrid import retrieve
+                    save_plan(query)
+                    retrieve(query, key, consensus_client if key == "consensus" else None)
+                elif key == "consensus":
                     run_consensus(query, client=consensus_client)
                 elif key in models:
                     run_agent(query, models[key], client)
+            if is_plan_and_solve(query):
+                from .planning import save_plan
+                from .hybrid import prepare_hybrid
+                save_plan(query)
+                prepare_hybrid(query)
             if plan.get("synthesis") and budget_for("synthesis")["enabled"]:
                 touch(query, "PREPARING_EVIDENCE", "synthesis")
                 synthesize_research(query, client=synthesis_client, model_id=selected_judge(query))
@@ -89,9 +99,9 @@ def execute_plan(query, token, client=None, consensus_client=None, synthesis_cli
 def finish_execution(query, timer):
     with persistence_guard(query):
         latest, active = select_attempts(query)
-        required = enabled_providers()
+        required = providers_for(query)
         success = any(key in active for key in required)
-        all_success = all(key in latest and succeeded(latest[key]) for key in required)
+        all_success = all(key in latest and succeeded(latest[key]) and not latest[key].normalized_response.get('partial') for key in required)
         final = query.synthesis_attempts.order_by("-pk").first()
         judge_ok = not budget_for("synthesis")["enabled"] or bool(final and final.succeeded and final.synthesis_data.get("evidence_attempt_ids") == sorted(r.pk for r in active.values()))
         query.status = "completed" if success else "failed"
@@ -105,14 +115,14 @@ def finish_execution(query, timer):
 
 def retry_research(query, target, model_id=None, client=None, consensus_client=None, synthesis_client=None, action_key=None):
     models = {model["label"].lower(): model for model in run_models(query)}
-    if target not in {*models, "consensus", "synthesis", "failed"}:
+    if target not in {*models, "consensus", "synthesis", "failed", *(['semantic_scholar'] if is_plan_and_solve(query) else [])}:
         raise ValueError("Unknown retry target.")
     if model_id and (target != "synthesis" or model_id not in allowed_judges(query)):
         raise ValueError("Judge model is not configured.")
     if target != "failed" and not budget_for(target)["enabled"]:
         raise ValueError("Provider is disabled.")
     latest, _ = select_attempts(query)
-    targets = [key for key in enabled_providers() if key not in latest or not succeeded(latest[key])] if target == "failed" else [] if target == "synthesis" else [target]
+    targets = [key for key in providers_for(query) if key not in latest or not succeeded(latest[key]) or latest[key].normalized_response.get('partial')] if target == "failed" else [] if target == "synthesis" else [target]
     plan = {"targets": targets, "synthesis": target == "synthesis", "judge_model": model_id or selected_judge(query)}
     token = claim(query, plan, mode="retry", action_key=action_key, action_target=target, model_id=model_id or "")
     if token is None:

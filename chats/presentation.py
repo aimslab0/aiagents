@@ -15,15 +15,23 @@ def prepare_dashboard_result(query, active, registry):
     query.valid_source_count = len(registry)
     query.active_agent_count = sum(r.provider == "openrouter" for r in active.values())
     query.consensus_available = "consensus" in active
+    query.semantic_scholar_available = 'semantic_scholar' in active
     query.ui_singleton = [query]
     consensus = active.get("consensus")
     query.ranked_papers = []
+    if query.execution_data.get('selection', {}).get('pipeline') == 'plan_and_solve':
+        for paper in query.execution_data.get('merged_evidence', []):
+            query.ranked_papers.append({**paper, 'url': safe_source_url(paper.get('url', '')),
+                'journal': paper['journal_or_venue'], 'abstract': paper['abstract_or_snippet'],
+                'provider_badge': 'Both' if len(paper['source_providers']) > 1 else 'Semantic Scholar' if paper['source_providers'] == ['semantic_scholar'] else 'Consensus'})
+        return
     if not consensus:
         return
     citations = list(consensus.citations_used.all())
     priorities = {p["source_id"]: p.get("total", 0) for p in data.get("diagnostics", {}).get("paper_priorities", [])}
     for original in consensus.normalized_response.get("papers", []):
-        paper = {**original, "url": safe_source_url(original.get("url", ""))}
+        paper = {**original, "url": safe_source_url(original.get("url", "")),
+                 'influential_citation_count': (original.get('api_metadata') or {}).get('influential_citation_count')}
         citation = next((c for c in citations if paper_identifiers(paper) & paper_identifiers({**(c.metadata or {}), "url": c.url})), None)
         paper["source_id"] = f"C{citation.pk}" if citation else ""
         paper["stored_priority"] = priorities.get(paper["source_id"], -1)

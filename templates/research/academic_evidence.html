@@ -1,14 +1,14 @@
 {% if research_queries %}
 <section class="agent-research academic-evidence" aria-label="Academic Evidence">
   <h2>Academic Evidence</h2>
-  <p class="research-disclaimer">Academic papers retrieved from Consensus, shown separately from the AI answers. Paper takeaways and metadata are supplied by Consensus; a retrieved paper is not automatically proof of a claim.</p>
+  <p class="research-disclaimer">Academic papers retrieved from the providers below, shown separately from model outputs. Provider metadata is retained; a retrieved paper is not automatically proof of a claim.</p>
   {% for query in research_queries %}
     <section class="research-run" aria-labelledby="evidence-{{ query.pk }}">
       <h3 id="evidence-{{ query.pk }}">{{ query.question }}</h3>
       {% for agent in query.academic_responses %}
-        {% with result=agent.normalized_response %}
+        {% with result=agent.normalized_response %}<h4>{{ agent.provider }}</h4>{% for request in result.requests %}{% if request.error %}<p>{{ request.error.message }}</p>{% endif %}{% endfor %}
           {% if result.error %}
-            <div class="evidence-error" role="status"><strong>Consensus unavailable</strong><p>{{ result.error.message }}</p></div>
+            <div class="evidence-error" role="status"><strong>{{ agent.provider }} unavailable</strong><p>{{ result.error.message }}</p></div>
           {% else %}
             {% if result.summary %}<p class="message-content">{{ result.summary }}</p>{% endif %}
             <p class="evidence-count">{{ result.papers|length }} unique paper{{ result.papers|length|pluralize }} found in this response</p>
@@ -17,13 +17,13 @@
               <details class="agent-card paper-card">
                 <summary>
                   <span class="agent-label">{{ paper.title }}</span>
-                  <span class="agent-outcome">{% if paper.year != None %}{{ paper.year }}{% endif %}{% if paper.journal %} · {{ paper.journal }}{% endif %}{% if paper.study_type %} · {{ paper.study_type }}{% endif %}</span>
+                  <span class="agent-outcome">{% if paper.year != None %}{{ paper.year }}{% endif %}{% if paper.journal %} · {% if paper.journal %}{{ paper.journal }}{% else %}{{ paper.journal_or_venue }}{% endif %}{% endif %}{% if paper.study_type %} · {{ paper.study_type }}{% endif %}</span>
                 </summary>
                 <div class="agent-card-body">
                   {% if paper.authors %}<p class="paper-authors">{{ paper.authors|join:", " }}</p>{% endif %}
                   {% if paper.published_date %}<p>Published: {{ paper.published_date }}</p>{% endif %}
                   {% if paper.takeaway %}<h4>Consensus paper takeaway</h4><p>{{ paper.takeaway }}</p>{% endif %}
-                  {% if paper.abstract %}<h4>Abstract excerpt</h4><p>{{ paper.abstract|truncatechars:1000 }}</p>{% else %}<p>No abstract was returned.</p>{% endif %}
+                  {% if paper.abstract_or_snippet %}<p>{{ paper.abstract_or_snippet|truncatechars:1000 }}</p>{% elif paper.abstract %}<h4>Abstract excerpt</h4><p>{{ paper.abstract|truncatechars:1000 }}</p>{% else %}<p>No abstract was returned.</p>{% endif %}
                   <div class="paper-metadata">
                     {% if paper.citation_count != None %}<span>Citations: {{ paper.citation_count }}</span>{% endif %}
                     {% if paper.sample_size != None %}<span>Sample size: {{ paper.sample_size }}</span>{% endif %}
@@ -34,7 +34,7 @@
                 </div>
               </details>
             {% empty %}
-              <p class="preview-notice">Consensus found no papers for this search. This does not establish that no evidence exists.</p>
+              <p class="preview-notice">{% if agent.provider == "consensus" %}Consensus{% else %}Semantic Scholar{% endif %} found no papers for this search. This does not establish that no evidence exists.</p>
             {% endfor %}
           {% endif %}
         {% endwith %}

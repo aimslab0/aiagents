@@ -14,20 +14,20 @@ from .services import run_research
 class ProductionConfigurationTests(SimpleTestCase):
     def test_balanced_defaults_and_labels(self):
         models, judge = configure_production({})
-        self.assertEqual([m["id"] for m in models], ["openai/gpt-6-astra", "google/gemini-3.1-pro-preview", "qwen/qwen3.8-max-0902"])
-        self.assertEqual(models[2]["display_label"], "Qwen3.8 Max")
-        self.assertEqual(judge, "x-ai/grok-4.20")
+        self.assertEqual([m["id"] for m in models], ["google/gemini-3.5-flash", "meta-llama/llama-4-scout", "qwen/qwen3.5-27b"])
+        self.assertEqual(models[2]["display_label"], "Planner 3 — Qwen3.5-27B")
+        self.assertEqual(judge, "deepseek/deepseek-v4-flash")
 
     def test_deep_preserves_previous_configuration_and_supports_overrides(self):
         models, judge = configure_production({"RESEARCH_MODE": "deep"})
         self.assertEqual([m["id"] for m in models], [PRODUCTION_MODEL_DEFAULTS[label] for label in PRODUCTION_RESEARCH_SLOTS])
-        self.assertEqual(judge, "openai/gpt-6-astra")
-        models, judge = configure_production({"RESEARCH_MODE": "deep", "CLAUDE_MODEL": "custom/claude", "DEEP_SYNTHESIZER_GPT_MODEL": "custom/judge"})
+        self.assertEqual(judge, "deepseek/deepseek-r1")
+        models, judge = configure_production({"RESEARCH_MODE": "deep", "CLAUDE_MODEL": "custom/claude", "DEEP_SYNTHESIZER_DEEPSEEK_MODEL": "custom/judge"})
         self.assertEqual(models[2]["id"], "custom/claude")
         self.assertEqual(judge, "custom/judge")
 
     def test_balanced_overrides_are_independent_from_legacy_deep_settings(self):
-        models, judge = configure_production({"BALANCED_THIRD_MODEL": "custom/third", "BALANCED_SYNTHESIZER_MODEL": "custom/judge", "CLAUDE_MODEL": "deep/claude", "SYNTHESIZER_MODEL": "deep/judge"})
+        models, judge = configure_production({"PLANNER_MODEL_3": "custom/third", "PRIMARY_SYNTHESIZER_MODEL": "custom/judge", "CLAUDE_MODEL": "deep/claude", "SYNTHESIZER_MODEL": "deep/judge"})
         self.assertEqual(models[2]["id"], "custom/third")
         self.assertEqual(models[2]["display_label"], "custom/third")
         self.assertEqual(judge, "custom/judge")

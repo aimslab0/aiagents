@@ -240,6 +240,13 @@ class SynthesisPersistenceTests(EvidenceFixtures, TestCase):
 @override_settings(OPENROUTER_API_KEY="synthesis-test-secret", CONSENSUS_API_KEY="consensus-test-secret")
 class FullSynthesisFlowTests(TestCase):
     def setUp(self):
+        # Preserve regression coverage for saved pre-refactor / legacy runs.
+        from research.configuration import select_configuration
+        selection = select_configuration('balanced')
+        selection['pipeline'] = 'legacy'
+        config = patch('chats.views.select_configuration', return_value=selection)
+        config.start()
+        self.addCleanup(config.stop)
         post = patch("requests.post")
         get = patch("requests.get", return_value=search_response())
         self.post, self.get = post.start(), get.start()

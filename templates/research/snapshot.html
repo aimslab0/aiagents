@@ -22,6 +22,7 @@
       <div><small>Academic papers</small><strong>{{ query.ranked_papers|length }} papers</strong></div>
       <div><small>AI agents</small><strong>{{ query.active_agent_count }}/3 successful</strong><small>Active saved responses</small></div>
       <div><small>Consensus</small><strong>{{ query.consensus_available|yesno:'Available,Unavailable' }}</strong></div>
+      {% if query.plan_and_solve %}<div><small>Semantic Scholar</small><strong>{{ query.semantic_scholar_available|yesno:'Available,Unavailable' }}</strong></div>{% endif %}
     </div>
   </section>
   <section class="reading-section"><p class="eyebrow">2-MINUTE VIEW</p><h2>Key Findings</h2>

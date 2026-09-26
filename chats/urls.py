@@ -1,9 +1,11 @@
 from django.urls import path
 
 from . import views
+from .prompt_enhancer import enhance
 
 app_name = "chats"
 urlpatterns = [
+    path("enhance-prompt/", enhance, name="enhance_prompt"),
     path("chats/clear/", views.clear_chats, name="clear"),
     path("chats/<int:chat_id>/rename/", views.rename_chat, name="rename"),
     path("chats/<int:chat_id>/delete/", views.delete_chat, name="delete"),

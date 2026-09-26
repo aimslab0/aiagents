@@ -16,6 +16,13 @@ from .services import save_question
 @override_settings(OPENROUTER_API_KEY="test-key", CONSENSUS_API_KEY="")
 class DashboardTests(TestCase):
     def setUp(self):
+        # Exercise the historical answer workflow; hybrid browser coverage is separate.
+        from research.configuration import select_configuration
+        selection = select_configuration('balanced')
+        selection['pipeline'] = 'legacy'
+        config = patch('chats.views.select_configuration', return_value=selection)
+        config.start()
+        self.addCleanup(config.stop)
         # Keep provider regression tests isolated; Step 4 has full-flow synthesis tests.
         synthesis = patch("research.services.synthesize_research")
         synthesis.start()

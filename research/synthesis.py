@@ -35,7 +35,7 @@ def _synthesize_research(query, client=None, model_id=None):
     logger.info("Synthesis start query_id=%s model=%s", query.pk, redact(model_id))
     try:
         touch(query, "PREPARING_EVIDENCE", "synthesis")
-        prepared = prepare_evidence(query)
+        prepared = prepare_evidence(query, model_id=model_id)
         context = prepared["context"]
         logger.info("Synthesis evidence query_id=%s agents=%s papers=%s", query.pk, len(context["agent_findings"]), len(context["academic_evidence"]))
         if not prepared["usable"]:
@@ -44,7 +44,13 @@ def _synthesize_research(query, client=None, model_id=None):
         stage = "provider_request"
         content = client.synthesize(context)
         stage = "structured_response_validation"
-        result = normalize_synthesis(content, prepared["sources"])
+        from agents.deep_synthesis import normalize_deep
+        result = (normalize_deep if context.get('deep_research') else normalize_synthesis)(content, prepared["sources"])
+        if 'research_plan' in context and not context.get('deep_research'):
+            if result['validation']['rejected_source_ids']:
+                raise SynthesisError('untraceable_source', result['validation']['rejected_source_ids'])
+            if len(result['key_findings']) > 5 or len(result['limitations']) > 5:
+                raise SynthesisError('malformed_response')
         stage = "support_annotation"
         annotate_support(result, prepared)
         if not context["academic_evidence"]:
@@ -91,6 +97,7 @@ def _synthesize_research(query, client=None, model_id=None):
         "failure_stage": stage,
         "attempted_at": timezone.now().isoformat(),
         "sources": prepared["sources"] if prepared else [],
+        "diagnostics": {"context_limits": prepared['context']['context_limits']} if prepared else {},
         "validation": {"rejected_source_ids": rejected_ids, "removed_source_id_count": 0},
     }
     try:

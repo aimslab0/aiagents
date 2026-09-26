@@ -6,6 +6,9 @@ def provider_for_model(model_id):
 
 
 def budget_for(provider):
+    if provider == "semantic_scholar":
+        return {"enabled": settings.SEMANTIC_SCHOLAR_ENABLED, "timeout": settings.SEMANTIC_SCHOLAR_TIMEOUT,
+                "max_tokens": None, "max_retries": settings.SEMANTIC_SCHOLAR_MAX_RETRIES, "backoff": settings.PROVIDER_RETRY_BACKOFF}
     consensus = provider == "consensus"
     synthesis = provider == "synthesis"
     return {

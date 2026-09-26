@@ -105,6 +105,8 @@ Enable HTTPS and the Web tab **Force HTTPS** option, then **Reload**. Visit the 
 dashboard and verify static assets and a CSRF-protected chat action. No paid research
 request is needed to check deployment. Ensure your hosting plan permits outbound
 HTTPS to `openrouter.ai` and `api.consensus.app` before research use.
+Production Balanced Plan-and-Solve also needs outbound HTTPS to `api.semanticscholar.org`.
+Its optional key is `SEMANTIC_SCHOLAR_API_KEY`; keep it private in `.env`.
 
 ## 5. Checks, logs and local development
 

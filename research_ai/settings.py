@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
-from .model_config import configure_models, configure_production, deep_judges
+from .model_config import configure_models, configure_production, deep_judges, ALTERNATIVE_SYNTHESIZER_DEFAULT, BALANCED_MODEL_DEFAULTS
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Process environment wins; secrets containing ${...} remain literal values.
@@ -76,14 +76,42 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+TEST_RUNNER = 'research_ai.test_runner.OfflineTestRunner'
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 X_FRAME_OPTIONS = "DENY"
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+PROMPT_ENHANCER_MODEL = os.getenv("PROMPT_ENHANCER_MODEL", "").strip() or "google/gemini-2.5-flash"
+PRIMARY_SYNTHESIZER_MODEL = os.getenv("PRIMARY_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS['synthesis']
+ALTERNATIVE_SYNTHESIZER_MODEL = os.getenv("ALTERNATIVE_SYNTHESIZER_MODEL", "").strip() or ALTERNATIVE_SYNTHESIZER_DEFAULT
+SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+SEMANTIC_SCHOLAR_ENABLED = os.getenv("SEMANTIC_SCHOLAR_ENABLED", "True").lower() in {"true", "1", "yes"}
+SEMANTIC_SCHOLAR_TIMEOUT = float(os.getenv("SEMANTIC_SCHOLAR_TIMEOUT", "30"))
+SEMANTIC_SCHOLAR_MAX_RETRIES = int(os.getenv("SEMANTIC_SCHOLAR_MAX_RETRIES", "0"))
+MAX_RETRIEVAL_QUERIES = int(os.getenv("MAX_RETRIEVAL_QUERIES", "5"))
+SEMANTIC_SCHOLAR_RESULTS_PER_QUERY = int(os.getenv("SEMANTIC_SCHOLAR_RESULTS_PER_QUERY", "5"))
+CONSENSUS_RESULTS_PER_QUERY = int(os.getenv("CONSENSUS_RESULTS_PER_QUERY", "5"))
+SYNTHESIS_MAX_EVIDENCE_ITEMS = int(os.getenv("SYNTHESIS_MAX_EVIDENCE_ITEMS", "8"))
+PLANNER_MAX_TOKENS = int(os.getenv("PLANNER_MAX_TOKENS", "1600"))
+if not math.isfinite(SEMANTIC_SCHOLAR_TIMEOUT) or SEMANTIC_SCHOLAR_TIMEOUT <= 0 or not 0 <= SEMANTIC_SCHOLAR_MAX_RETRIES <= 5:
+    raise ImproperlyConfigured("Invalid Semantic Scholar timeout or retry count.")
+if not 1 <= MAX_RETRIEVAL_QUERIES <= 5 or not 1 <= SEMANTIC_SCHOLAR_RESULTS_PER_QUERY <= 100 or not 1 <= CONSENSUS_RESULTS_PER_QUERY <= 20 or not 1 <= SYNTHESIS_MAX_EVIDENCE_ITEMS <= 30 or PLANNER_MAX_TOKENS <= 0:
+    raise ImproperlyConfigured("Invalid planning or retrieval limits.")
 OPENROUTER_MODELS, SYNTHESIZER_MODEL = configure_production(os.environ)
 RESEARCH_MODE = os.getenv("RESEARCH_MODE", "balanced").strip().lower()
 DEEP_SYNTHESIZER_OPTIONS, DEEP_DEFAULT_SYNTHESIZER = deep_judges(os.environ)
+DEEP_SYNTHESIS_BUDGETS = {}
+for judge_key, prefix, defaults in (
+    ('deepseek', 'DEEPSEEK', (8, 1800, 40000)),
+    ('claude', 'CLAUDE', (20, 3000, 100000)),
+):
+    values = {key: int(os.getenv(f'{prefix}_SYNTHESIS_{suffix}', str(default)))
+              for key, suffix, default in zip(('items', 'abstract_chars', 'context_chars'),
+              ('MAX_EVIDENCE_ITEMS', 'MAX_ABSTRACT_CHARS', 'MAX_CONTEXT_CHARS'), defaults)}
+    if not 1 <= values['items'] <= 50 or not 100 <= values['abstract_chars'] <= 10000 or not 5000 <= values['context_chars'] <= 200000:
+        raise ImproperlyConfigured('Invalid Deep synthesis evidence/context budget.')
+    DEEP_SYNTHESIS_BUDGETS[judge_key] = values
 RESEARCH_PROFILES = {mode: configure_production({**os.environ, "RESEARCH_MODE": mode}) for mode in ("balanced", "deep")}
 OPENROUTER_PRODUCTION_MODELS = [dict(model) for model in OPENROUTER_MODELS]
 OPENROUTER_CONNECT_TIMEOUT = float(os.getenv("OPENROUTER_CONNECT_TIMEOUT", "5"))
@@ -176,3 +204,4 @@ for budget in PROVIDER_BUDGETS.values():
     if not 0 <= budget.get("max_retries", 0) <= 5 or not 0 <= budget.get("backoff", 0) <= 30:
         raise ImproperlyConfigured("Provider retry counts must be 0-5 and backoff 0-30 seconds.")
 LOGGING["loggers"]["research.execution"] = {"handlers": ["console"], "level": "INFO", "propagate": False}
+LOGGING["loggers"]["agents.prompt_enhancer"] = {"handlers": ["console"], "level": "INFO", "propagate": False}

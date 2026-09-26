@@ -4,13 +4,13 @@ from agents.budgets import enabled_providers, budget_for
 from .execution import claim, ownership, persistence_guard
 from .metrics import select_attempts
 from .services import execute_plan
-from .configuration import selected_judge, allowed_judges
+from .configuration import selected_judge, allowed_judges, providers_for
 
 
 def recovery_plan(query, resume_synthesis=True):
     _, active = select_attempts(query)
-    original = query.execution_data or {"targets": enabled_providers(), "synthesis": True}
-    targets = [key for key in original.get("targets", []) if key in enabled_providers() and key not in active]
+    original = query.execution_data or {"targets": providers_for(query), "synthesis": True}
+    targets = [key for key in original.get("targets", []) if key in providers_for(query) and key not in active]
     judge = selected_judge(query)
     if judge not in allowed_judges(query):
         judge = allowed_judges(query)[0]

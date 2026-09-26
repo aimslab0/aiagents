@@ -1,0 +1,9 @@
+<details><summary>Academic review structure</summary>
+  <h4>Methodology groups</h4>
+  {% for group in review.methodology_groups %}<p><strong>{{ group.methodology }}</strong>: {{ group.summary }} [{{ group.source_ids|join:', ' }}]</p>{% empty %}<p>No methodology grouping supported by the supplied evidence.</p>{% endfor %}
+  <h4>Academic disagreements</h4>
+  {% for group in review.academic_disagreements %}<p><strong>{{ group.issue }}</strong>: {{ group.positions|join:'; ' }}</p><p>{{ group.possible_explanations }} [{{ group.source_ids|join:', ' }}]</p>{% empty %}<p>No academic disagreements reported.</p>{% endfor %}
+  <h4>Research gaps — interpret cautiously</h4>
+  {% for gap in review.research_gaps %}<p><strong>{{ gap.gap }}</strong>: {{ gap.why_it_matters }}</p><p>{{ gap.evidence_basis }} [{{ gap.source_ids|join:', ' }}]</p>{% empty %}<p>No evidence-grounded gaps reported.</p>{% endfor %}
+  <h4>Future research directions</h4><ul>{% for direction in review.future_research_directions %}<li>{{ direction }}</li>{% endfor %}</ul>
+</details>

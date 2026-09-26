@@ -8,6 +8,7 @@
       {% if final and result.status == 'completed' %}
         {% if result.last_attempt_error %}<p class="evidence-error" role="status">A later synthesis attempt failed. The previously accepted answer is shown.</p>{% endif %}
         <div class="final-answer-text message-content">{{ final.answer }}</div>
+        {% if result.deep_research %}{% include 'research/deep_review.html' with review=result.deep_research %}{% endif %}
         {% if result.executive_summary %}<p class="final-summary">{{ result.executive_summary }}</p>{% endif %}
         <div class="final-confidence">
           <strong>Confidence: {% if final.confidence != None %}{{ final.confidence|floatformat:"-1" }}/100{% else %}Not assessed{% endif %}</strong>

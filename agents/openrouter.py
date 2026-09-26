@@ -20,9 +20,10 @@ def api_error_code(status):
 
 
 class OpenRouterClient(ResearchAgent):
-    def __init__(self, max_tokens=None, provider_key=None):
+    def __init__(self, max_tokens=None, provider_key=None, planner=False):
         self.max_tokens = max_tokens
         self.provider_key = provider_key
+        self.planner = planner
 
     @sensitive_variables()
     def research(self, question, model_id):
@@ -30,6 +31,7 @@ class OpenRouterClient(ResearchAgent):
         if not budget["enabled"] or not settings.OPENROUTER_API_KEY:
             raise AgentError("configuration")
         topic_discovery = is_topic_discovery(question)
+        from .planner import PLANNER_PROMPT, PLANNER_SCHEMA, normalize_plan
         payload = {
             "model": model_id,
             "messages": [
@@ -44,6 +46,10 @@ class OpenRouterClient(ResearchAgent):
             "max_tokens": self.max_tokens if self.max_tokens is not None else budget["max_tokens"],
             "stream": False,
         }
+        if self.planner:
+            payload['messages'][0]['content'] = PLANNER_PROMPT
+            payload['response_format']['json_schema'] = {'name': 'research_plan', 'strict': True, 'schema': PLANNER_SCHEMA}
+            payload['max_tokens'] = min(payload['max_tokens'], settings.PLANNER_MAX_TOKENS)
         try:
             response = requests.post(
                 API_URL,
@@ -85,5 +91,5 @@ class OpenRouterClient(ResearchAgent):
                 raise TypeError
         except (KeyError, IndexError, TypeError, AttributeError):
             raise AgentError("malformed_response", raw_response=raw) from None
-        normalize = normalize_topic_content if topic_discovery else normalize_content
+        normalize = normalize_plan if self.planner else normalize_topic_content if topic_discovery else normalize_content
         return redact(normalize(content, model_id, raw))

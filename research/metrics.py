@@ -84,7 +84,7 @@ def source_is_valid(query, source):
     source_id = source.get("source_id", "")
     if source.get("kind") == "academic":
         pk = source.get("citation_id")
-        return type(pk) is int and 0 < pk < 2**63 and source_id == f"C{pk}" and query.citations.filter(pk=pk).exists()
+        return type(pk) is int and 0 < pk < 2**63 and source_id in {f"C{pk}", f"S{pk}", f"M{pk}"} and query.citations.filter(pk=pk).exists()
     pk = source.get("agent_response_id")
     return source.get("kind") == "agent" and type(pk) is int and 0 < pk < 2**63 and source_id == f"A{pk}" and query.agent_responses.filter(pk=pk, provider="openrouter").exists()
 
@@ -109,7 +109,7 @@ def research_metrics(query):
         "successful_agents": sum(succeeded(r) for r in latest.values() if r.provider == "openrouter"),
         "consensus_success": succeeded(latest["consensus"]) if "consensus" in latest else None,
         "synthesis_success": judge.succeeded if judge else None,
-        "paper_count": len(active["consensus"].normalized_response.get("papers", [])) if "consensus" in active else 0,
+        "paper_count": query.execution_data.get('hybrid_diagnostics', {}).get('unique_papers', len(active["consensus"].normalized_response.get("papers", [])) if "consensus" in active else 0),
         "total_estimated_openrouter_cost": sum(costs, Decimal(0)) if attempts and not missing else None,
         "known_cost_subtotal": sum(costs, Decimal(0)), "attempts_missing_cost": missing,
         "valid_source_percent": round(100 * len(ids & registry) / len(ids), 1) if ids else None,

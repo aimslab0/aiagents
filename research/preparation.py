@@ -32,7 +32,15 @@ class TextBudget:
         return excerpt
 
 
-def prepare_evidence(query):
+def prepare_evidence(query, model_id=None):
+    from .configuration import is_deep_synthesis, deep_synthesis_budget, selected_judge
+    if is_deep_synthesis(query):
+        from .hybrid import prepare_hybrid
+        return prepare_hybrid(query, deep_synthesis_budget(model_id or selected_judge(query)))
+    from .configuration import is_plan_and_solve
+    if is_plan_and_solve(query):
+        from .hybrid import prepare_hybrid
+        return prepare_hybrid(query)
     notices = []
     sources = []
     candidates = []

@@ -24,6 +24,8 @@ def dashboard_context(chat=None, form=None):
     queries = list(chat.research_queries.select_related("final_response").prefetch_related("agent_responses").order_by("created_at", "pk")) if chat else []
     for query in queries:
         query.retry_token = uuid4()
+        query.plan_and_solve = query.execution_data.get('selection', {}).get('pipeline') == 'plan_and_solve'
+        query.semantic_scholar_enabled = query.plan_and_solve and settings.SEMANTIC_SCHOLAR_ENABLED
         selection = query.execution_data.get("selection") or {}
         query.deep_selection_enabled = selection.get("mode") == "deep" and not selection.get("free_test") and not settings.OPENROUTER_FREE_TEST_MODE
         query.retry_models = [m for m in run_models(query) if budget_for(m["label"].lower())["enabled"]]
@@ -40,8 +42,8 @@ def dashboard_context(chat=None, form=None):
         responses = list(query.agent_responses.all())
         latest, active = select_attempts(query)
         displayed = {**latest, **active}
-        query.ai_responses = [response for response in displayed.values() if response.provider != "consensus"]
-        query.academic_responses = [response for response in displayed.values() if response.provider == "consensus"]
+        query.ai_responses = [response for response in displayed.values() if response.provider == "openrouter"]
+        query.academic_responses = [response for response in displayed.values() if response.provider in {"consensus", "semantic_scholar"}]
         query.attempt_history = sorted(responses, key=lambda r: r.pk, reverse=True)
         query.latest_failures = [r for r in latest.values() if not succeeded(r)]
         for response in query.attempt_history:
@@ -78,7 +80,7 @@ def dashboard_context(chat=None, form=None):
         "research_queries": queries,
         "form": form,
         "show_deep_selector": form["research_mode"].value() == "deep" and not settings.OPENROUTER_FREE_TEST_MODE,
-        "deep_synthesizer_options": settings.DEEP_SYNTHESIZER_OPTIONS,
+        "deep_synthesizer_options": [{k: o[k] for k in ('key', 'label', 'warning')} for o in settings.DEEP_SYNTHESIZER_OPTIONS],
         "diagnostics_enabled": settings.RESEARCH_DIAGNOSTICS_ENABLED,
         "credential_readiness": credentials_ready(),
         "judge_models": settings.SYNTHESIZER_MODELS,
@@ -87,7 +89,7 @@ def dashboard_context(chat=None, form=None):
         "consensus_enabled": budget_for("consensus")["enabled"],
         "synthesis_enabled": budget_for("synthesis")["enabled"],
         "free_test_mode": settings.OPENROUTER_FREE_TEST_MODE,
-        "configured_models": settings.OPENROUTER_MODELS,
+        "configured_models": settings.RESEARCH_PROFILES['balanced'][0] if settings.RESEARCH_MODE == 'deep' and not settings.OPENROUTER_FREE_TEST_MODE else settings.OPENROUTER_MODELS,
         "configured_judge": settings.SYNTHESIZER_MODEL,
     }
 
@@ -205,7 +207,7 @@ def run_evaluation(request, case_id):
         raise Http404
     try:
         key = UUID(request.POST["submission_key"]) if request.POST.get("submission_key") else None
-        query = save_question(cases[case_id]["question"], submission_key=key)
+        query = save_question(cases[case_id]["question"], submission_key=key, selection=select_configuration(settings.RESEARCH_MODE))
     except ValueError:
         return HttpResponseBadRequest("Invalid or reused submission token.")
     except DatabaseError:

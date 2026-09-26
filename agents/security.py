@@ -14,14 +14,14 @@ def redact(value):
         return {
             redact(key): "[REDACTED]" if key.lower() in {
                 "authorization", "api_key", "apikey", "x-api-key",
-                "openrouter_api_key", "consensus_api_key",
+                "openrouter_api_key", "consensus_api_key", "semantic_scholar_api_key",
             } else redact(item)
             for key, item in value.items()
         }
     if isinstance(value, list):
         return [redact(item) for item in value]
     if isinstance(value, str):
-        for name in ("OPENROUTER_API_KEY", "CONSENSUS_API_KEY"):
+        for name in ("OPENROUTER_API_KEY", "CONSENSUS_API_KEY", "SEMANTIC_SCHOLAR_API_KEY"):
             secret = getattr(settings, name, "")
             if secret:
                 value = value.replace(secret, "[REDACTED]")

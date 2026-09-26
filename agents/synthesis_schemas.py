@@ -135,7 +135,7 @@ def normalize_synthesis(content, sources):
     for finding in result["key_findings"]:
         finding["declared_evidence_strength"] = finding["evidence_strength"]
         finding["supporting_source_ids"] = filter_ids(finding["supporting_source_ids"])
-        if finding["evidence_strength"] in {"strong", "moderate"} and not any(item.startswith("C") for item in finding["supporting_source_ids"]):
+        if finding["evidence_strength"] in {"strong", "moderate"} and not any(item.startswith(("C", "S", "M")) for item in finding["supporting_source_ids"]):
             finding["evidence_strength"] = "limited"
             note = "A finding was limited because no supplied academic source was attached."
             if note not in result["limitations"]:
@@ -146,7 +146,7 @@ def normalize_synthesis(content, sources):
     prose += result["agreements"] + result["disagreements"] + result["limitations"]
     prose += [value for finding in result["key_findings"] for value in (finding["claim"], finding["explanation"])]
     for text in prose:
-        refs = re.findall(r"\b[AC]\d+\b", text)
+        refs = re.findall(r"\b[ACSM]\d+\b", text)
         if any(ref not in allowed for ref in refs) or re.search(r"https?://|www\.|\bdoi\s*:|\b10\.\d{4,9}/", text, re.I):
             raise SynthesisError("untraceable_source", [ref for ref in refs if ref not in allowed])
         result["source_ids"].extend(refs)

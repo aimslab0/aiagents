@@ -41,7 +41,7 @@
             {% include "research/configuration.html" with configured_models=query.run_models configured_judge=query.selected_judge_id %}
             {% with research_queries=query.ui_singleton %}
               <details><summary>Individual AI responses</summary>{% include "research/agent_research.html" %}</details>
-              <details><summary>Full Consensus Evidence</summary>{% include "research/academic_evidence.html" %}</details>
+              <details><summary>Full Academic Evidence</summary>{% include "research/academic_evidence.html" %}</details>
               <details><summary>Judge/Synthesizer details</summary>{% include "research/final_answer.html" %}</details>
               {% include "research/attempts.html" %}
             {% endwith %}
@@ -75,6 +75,8 @@
         {{ deep_synthesizer_options|json_script:'deep-synthesizer-options' }}
         <label for="id_question" class="visually-hidden">Research question</label>
         {{ form.question }}
+        <button type="button" id="enhance-prompt" class="btn btn-sm btn-outline-secondary mt-2" data-url="{% url 'chats:enhance_prompt' %}" aria-describedby="enhance-feedback">✨ Enhance Prompt</button>
+        <small id="enhance-feedback" class="d-block mt-1" role="status" aria-live="polite"></small>
         {{ form.submission_key }}
         {% if form.question.errors %}<div class="text-danger small px-2" role="alert">{{ form.question.errors }}</div>{% endif %}
         <div class="composer-actions"><span>One question. A starting point.</span><button type="submit" class="btn research-button">Research <span aria-hidden="true">↑</span></button></div>

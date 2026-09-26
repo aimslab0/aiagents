@@ -1,5 +1,249 @@
 # Multi AI Research
 
+## Prompt Enhancer
+
+Click **✨ Enhance Prompt** beside the research input to rewrite an idea into one
+academic research question. Review the replacement, then press **Research** yourself.
+Enhancement does not create chats, research queries, or history records.
+
+The CSRF-protected `POST /enhance-prompt/` accepts `{"text": "your idea"}` and returns
+`enhanced_text` and `model_used`. It reuses `OPENROUTER_API_KEY` and is independent
+of research mode selection. One paid model is configured centrally:
+
+```dotenv
+PROMPT_ENHANCER_MODEL=google/gemini-2.5-flash
+```
+
+The [current OpenRouter catalog](https://openrouter.ai/api/v1/models) was checked
+on 2026-09-25: Gemini 1.5 Flash is no longer listed; Gemini 2.5 Flash is available
+and supports disabled reasoning and low temperature for short rewrites. Its catalog
+expiration date is 2026-10-20; update the environment setting before retirement.
+Each enhancement makes one request, with no retries or secondary model. Provider
+failover is disabled. Output is plain text, without a structured JSON requirement.
+
+Limits: 2,000 input characters, 256 output tokens, temperature 0.2, 5-second
+connection and 20-second read timeout per model. The browser stops waiting after
+55 seconds. Existing text is preserved on failure or if edited while waiting.
+
+Run frontend behavior tests with `node --test tests/js/prompt-enhancer.test.cjs`.
+The Django suite mocks all enhancer API requests.
+
+Enhancer diagnostics use the `agents.prompt_enhancer` console logger: attempted
+model, HTTP status, sanitized provider message/category, latency, and
+final outcome. Prompts, responses and credentials are not logged. In development
+(`DEBUG=True`), a missing key produces a specific configuration message. Other
+failures retain a generic browser message. A timeout can indicate
+outbound network/proxy connectivity; changing model IDs cannot fix that condition.
+
+## Deep Research synthesizers
+
+Deep Research now offers exactly **DeepSeek R1** (`deepseek/deepseek-r1`, default,
+“Lower-cost reasoning”) and **Claude Sonnet 5** (`anthropic/claude-sonnet-5`,
+“Large-context academic synthesis”). Browser controls submit only `deepseek` or
+`claude`; unknown values, old GPT/Grok keys and arbitrary model IDs are rejected.
+The existing OpenRouter synthesizer client receives the server-resolved model.
+
+The current OpenRouter catalog pages verify [DeepSeek R1](https://openrouter.ai/deepseek/deepseek-r1)
+and [Claude Sonnet 5](https://openrouter.ai/anthropic/claude-sonnet-5), including
+JSON output support. The API catalog advertises `response_format` for R1 but not
+`structured_outputs`: R1 therefore uses JSON-object mode with the schema supplied
+in the prompt and strictly validated locally. Claude uses native strict JSON-schema
+mode. They advertise 64K and 1M context respectively (checked
+2026-09-25); availability may change. No paid inference was used to verify them.
+
+New production Deep runs reuse the existing Plan-and-Solve planner model IDs and
+Semantic Scholar + Consensus retrieval route. Only synthesis differs from Balanced:
+the selected judge, evidence budget and academic-review prompt/schema. Balanced
+and free-test behavior remain unchanged. Economy is not implemented in this repo;
+this update does not add it or map it to another mode. Legacy Deep agent settings
+remain stored for historical compatibility but do not select new Deep planners.
+
+```dotenv
+DEEP_SYNTHESIZER_DEEPSEEK_MODEL=deepseek/deepseek-r1
+DEEP_SYNTHESIZER_CLAUDE_MODEL=anthropic/claude-sonnet-5
+DEEP_DEFAULT_SYNTHESIZER=deepseek
+DEEPSEEK_SYNTHESIS_MAX_EVIDENCE_ITEMS=8
+DEEPSEEK_SYNTHESIS_MAX_ABSTRACT_CHARS=1800
+DEEPSEEK_SYNTHESIS_MAX_CONTEXT_CHARS=40000
+CLAUDE_SYNTHESIS_MAX_EVIDENCE_ITEMS=20
+CLAUDE_SYNTHESIS_MAX_ABSTRACT_CHARS=3000
+CLAUDE_SYNTHESIS_MAX_CONTEXT_CHARS=100000
+```
+
+Remove retired `DEEP_SYNTHESIZER_GPT_MODEL` and `DEEP_SYNTHESIZER_GROK_MODEL` entries
+when convenient; they no longer define selector choices. Replace the previous
+`DEEP_DEFAULT_SYNTHESIZER=gpt` value. The private local `.env` was updated only for
+the three active Deep model/default variables; other settings and secrets were preserved.
+
+The evidence preparation layer still normalizes, merges and ranks both provider
+streams once per preparation. Model-specific limits select ranked whole papers
+before JSON serialization and bound individual snippets; oversized contexts drop
+the lowest-ranked whole papers and their source mappings. For Deep, the serialized
+context ceiling is conservatively enforced against UTF-8 byte length, so non-ASCII
+text is not undercounted. These limits are cost/context controls, not exact model token counts. Do not raise
+them to the advertised token window directly. Existing output-token and timeout
+settings continue to apply. No raw API payloads or duplicate papers are sent.
+Metadata includes titles, authors, dates, venue, study design, sample size, DOI,
+counts, Consensus relevance/available quality metadata, provenance and internal IDs.
+
+The Deep JSON schema (`agents/deep_synthesis.py`) contains `executive_summary`,
+`methodology_groups`, `major_findings`, `academic_agreements`,
+`academic_disagreements`, `research_gaps`, `methodological_limitations`,
+`future_research_directions`, `literature_review`, `overall_confidence`, `source_ids`.
+Nested methodology/finding/disagreement/gap objects carry source IDs. Every nested
+ID and prose reference is checked by the existing source validator against supplied
+academic evidence. Unknown IDs reject the attempt. The accepted review is retained
+under `synthesis_data.deep_research` and mapped into the existing final answer,
+findings, agreements, disagreements and limitations fields; no migration is required.
+Confidence remains an analytical estimate, not a statistical probability.
+
+The prompt distinguishes methods from results, literature gaps from retrieval gaps,
+and foundational from recent evidence. It treats all paper content as untrusted
+data, never instructions, and does not infer methodological quality from citation
+counts. The literature review is displayed in the existing final-answer area;
+structured review details appear inside the existing synthesis detail section.
+
+To compare both judges locally, use production/free-test=False, start the server,
+select **Deep Research → DeepSeek R1**, and submit one question. Under its existing
+retry controls, choose **Claude Sonnet 5 → Re-run Final Synthesis**. The second action
+only calls the synthesizer, prepares a larger subset of already saved evidence and
+preserves prior SynthesisAttempt history. Both actions incur API usage. Diagnostics
+show model, supplied/omitted evidence counts, latency, tokens, cost and status for
+each attempt, including failures. Old Deep runs without Semantic Scholar evidence
+can only reuse what was actually saved; re-synthesis never fetches missing papers.
+
+## Current Balanced workflow: Plan-and-Solve
+
+New **production Balanced** requests now follow:
+
+`Question → three independent query planners → deterministic ResearchPlan → Semantic Scholar + Consensus → deduplication/ranking → DeepSeek synthesis`.
+
+The planners are `google/gemini-3.5-flash`, `meta-llama/llama-4-scout` and
+`qwen/qwen3.5-27b`. The default judge is `deepseek/deepseek-v4-flash`; select
+`openai/o4-mini` under the existing re-synthesis controls to compare judges using
+saved evidence. IDs and structured-output support were checked against the public
+[OpenRouter catalog](https://openrouter.ai/api/v1/models) on 2026-09-25. Availability
+and prices can change; no paid inference was used for validation.
+
+FREE TEST MODE retains its earlier behavior; Deep synthesis is described above. Existing runs without
+a `selection.pipeline=plan_and_solve` marker retain the legacy evidence path. Saved
+run model selections remain available for retry and recovery. The historical step
+descriptions below document that earlier workflow, not the new Balanced default.
+
+Use these values in your private `.env`, preserving existing credentials:
+
+```dotenv
+OPENROUTER_FREE_TEST_MODE=False
+RESEARCH_MODE=balanced
+PLANNER_MODEL_1=google/gemini-3.5-flash
+PLANNER_MODEL_2=meta-llama/llama-4-scout
+PLANNER_MODEL_3=qwen/qwen3.5-27b
+PLANNER_MAX_TOKENS=1600
+PRIMARY_SYNTHESIZER_MODEL=deepseek/deepseek-v4-flash
+ALTERNATIVE_SYNTHESIZER_MODEL=openai/o4-mini
+SEMANTIC_SCHOLAR_API_KEY=
+SEMANTIC_SCHOLAR_ENABLED=True
+SEMANTIC_SCHOLAR_TIMEOUT=30
+SEMANTIC_SCHOLAR_MAX_RETRIES=0
+CONSENSUS_ENABLED=True
+MAX_RETRIEVAL_QUERIES=5
+SEMANTIC_SCHOLAR_RESULTS_PER_QUERY=5
+CONSENSUS_RESULTS_PER_QUERY=5
+SYNTHESIS_MAX_EVIDENCE_ITEMS=8
+```
+
+Semantic Scholar's key is optional; anonymous access may be rate-limited. OpenRouter
+and Consensus still require their existing keys. The older `BALANCED_*_MODEL`
+variables no longer select models for new Balanced requests; Deep variables are
+unchanged. Set `OPENROUTER_FREE_TEST_MODE=True` to return to the existing free-model
+workflow. Local development still uses `DEBUG=True` and localhost `ALLOWED_HOSTS`.
+
+Planners emit the schema in `agents/planner.py`: interpretation, subquestions,
+3–5 search queries, keywords/synonyms, population/exposure/outcome terms, suggested
+filters, possible gaps and uncertainties. These are search strategies, not evidence.
+Calls are independent and currently sequential to retain PythonAnywhere compatibility.
+The deterministic aggregator uses round-robin query selection and token-set Jaccard
+similarity ≥0.85 to discard near duplicates. If every planner fails or yields no
+query, retrieval uses the original question. Planner filters remain advisory; the
+existing configured Consensus filters still apply. No extra model merges the plans.
+
+`ResearchPlan` lives in `ResearchQuery.execution_data.research_plan`:
+`original_question`, `canonical_search_queries`, `keywords`, `synonyms`,
+`research_subquestions`, `candidate_gap_hypotheses`, `uncertainties`, `filters`,
+`generated_query_count`, `successful_planners`. Attempts keep complete normalized
+planner outputs. Academic provider attempts each retain their own request outcomes,
+normalized papers, raw response snapshots and the plan used for retrieval.
+
+Retrieval uses only API calls:
+
+- Semantic Scholar: `GET https://api.semanticscholar.org/graph/v1/paper/search`
+  with `query`, `limit` and explicit metadata `fields`.
+- Consensus: the unchanged `GET https://api.consensus.app/v1/search` service,
+  called with each canonical search query and a smaller per-query result limit.
+
+The [Semantic Scholar Academic Graph contract](https://api.semanticscholar.org/api-docs/graph)
+is the reference; no scraping occurs. Optional recommendation expansion is not
+enabled in this first version, so it adds no calls or cost.
+
+Each normalized `AcademicEvidence` contains `source_provider`, provider `source_id`,
+`title`, `authors`, `year`, `journal_or_venue`, `abstract_or_snippet`, `url`, `doi`,
+`citation_count`, `influential_citation_count`, `study_type`, `sample_size`,
+`relevance_score`, `open_access`, and `metadata`. Missing values stay empty/null.
+No peer-review, quality, sample-size or open-access status is inferred from absence.
+Provider-specific metadata remains in `provider_records` after merging.
+
+Identity matching uses DOI, Semantic Scholar/external identifiers, canonical URL,
+then normalized title plus known year. Conflicting nonempty DOIs prevent fallback
+merges. Merged papers retain `source_providers`, provider snapshots and identity keys.
+Internal citation IDs are `S<pk>`, `C<pk>` or `M<pk>` for Semantic Scholar, Consensus
+or both; the judge cannot create Citation records. Unknown returned IDs reject a
+new Plan-and-Solve answer and preserve any previously accepted answer.
+
+Ranking is inspectable: question/subquestion lexical overlap and normalized Consensus
+relevance dominate; log-capped citation influence, study-type metadata and optional
+recency are secondary. Venue diversity operates within relevance tiers. This is a
+retrieval heuristic, not entailment, truth or methodological-quality assessment.
+`foundational` requires relevance, age and citation influence; age alone is insufficient.
+`recent`, `highly_relevant` and `supporting` are organizational labels only.
+
+The judge receives the plan, short planner interpretations/uncertainties and at most
+eight deduplicated papers with bounded snippets. Raw payloads are excluded. Papers
+without usable abstract/snippet text remain in diagnostics but are not treated as
+substantive synthesis evidence. At least one usable academic paper is required;
+planner speculation alone never supports a Balanced final answer. The prompt asks
+for a 100–150-word executive summary and at most three thesis topics; the structured
+contract limits key findings and limitations to five each.
+
+Cost controls: planner output is capped at 1,600 tokens per call (down from the
+previous 4,096 shared default); at most five queries × two providers × five results
+before deduplication, and eight evidence items for synthesis. Existing judge token
+and timeout settings remain configurable. Retries remain opt-in, default zero.
+The cheap primary judge and bounded context reduce LLM spending, but Consensus now
+receives multiple searches: total savings depend on provider pricing and workload.
+Diagnostics show measured token usage, latency, reported/estimated OpenRouter cost,
+request/result counts, failed retrieval requests, duplicate counts and retained papers.
+Retrieval-provider billing remains unknown rather than reported as zero.
+
+Provider failures preserve other results. Retry buttons reuse existing attempt,
+history and lease/recovery mechanisms. Retry a planner, then retry retrieval if you
+want its updated plan searched; re-synthesis alone never calls retrieval. A partial
+multi-query provider response retains successful papers and per-query errors.
+Rate-limit/authentication/billing failures stop that provider's remaining queries.
+Automatic retries, if enabled, repeat that provider's bounded query batch.
+
+For a first live local test, update `.env` as above, ensure both required provider
+keys are set, restart with the local setup command below, choose **Balanced**, and
+submit one question such as “Does sleep improve long-term memory in adults?”.
+Inspect planner JSON, provider badges, request counts and final mapped source IDs.
+That deliberate browser submission uses live API credits. Re-run synthesis with
+o4-mini only if you want an additional paid comparison. Tests use mocked provider
+HTTP, and the test runner blocks unmocked external requests.
+
+No database migration is needed. PythonAnywhere must allow outbound HTTPS to
+`api.semanticscholar.org` in addition to the two existing providers. The bounded
+search batches remain synchronous and can still exceed hosting request limits;
+existing stale-run recovery remains applicable.
+
 ## Research dashboard
 
 When deploying updated templates, run `python manage.py collectstatic --noinput`

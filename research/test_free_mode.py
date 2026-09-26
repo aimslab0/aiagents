@@ -65,10 +65,10 @@ class FreeConfigurationTests(SimpleTestCase):
                 spec = importlib.util.spec_from_file_location("research_ai._test_settings", Path(settings.BASE_DIR) / "research_ai" / "settings.py")
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
-                self.assertEqual([m["id"] for m in module.OPENROUTER_PRODUCTION_MODELS], ["openai/gpt-6-astra", "google/gemini-3.1-pro-preview", "qwen/qwen3.8-max-0902"])
+                self.assertEqual([m["id"] for m in module.OPENROUTER_PRODUCTION_MODELS], ["google/gemini-3.5-flash", "meta-llama/llama-4-scout", "qwen/qwen3.5-27b"])
                 expected = list(VERIFIED_FREE_MODELS) if flag == "True" else [m["id"] for m in module.OPENROUTER_PRODUCTION_MODELS]
                 self.assertEqual([m["id"] for m in module.OPENROUTER_MODELS], expected)
-                self.assertEqual(module.SYNTHESIZER_MODEL, VERIFIED_FREE_MODELS[0] if flag == "True" else "x-ai/grok-4.20")
+                self.assertEqual(module.SYNTHESIZER_MODEL, VERIFIED_FREE_MODELS[0] if flag == "True" else "deepseek/deepseek-v4-flash")
 
 
 @override_settings(OPENROUTER_API_KEY="free-test-key", CONSENSUS_API_KEY="consensus-test-key",
