@@ -1,1 +1,17 @@
-{% if diagnostics_enabled %}<details class="configuration-details"><summary>Developer Diagnostics — configuration</summary><p>{% if free_test_mode %}FREE TEST MODE{% else %}PRODUCTION MODE{% endif %}</p>{% for model in configured_models %}<p>{{ model.display_label|default:model.label }}: {{ model.id }}</p>{% endfor %}<p>Synthesizer: {{ configured_judge }}</p><details><summary>Credential readiness</summary>{% for provider, ready in credential_readiness.items %}<p>{{ provider }}: {{ ready|yesno:'Configured,Missing' }}</p>{% endfor %}</details><a href="{% url 'chats:evaluations' %}">Manual evaluation cases and results</a></details>{% endif %}
+{% if diagnostics_enabled %}
+<details class="configuration-details"><summary>Developer Diagnostics</summary>
+<p>{% if free_test_mode %}FREE TEST MODE{% else %}PRODUCTION MODE{% endif %}</p>
+<h3>Research Planners</h3>
+{% for model in configured_models %}<p><strong>{{ model.display_label|default:model.label }}</strong><br><code>{{ model.id }}</code></p>{% endfor %}
+<h3>Retrieval</h3>
+<p>Semantic Scholar: {{ semantic_scholar_enabled|yesno:'Enabled,Disabled' }}<br>API key: {{ semantic_scholar_key_ready|yesno:'Configured,Not configured (public access)' }}</p>
+<p>Consensus: {{ consensus_enabled|yesno:'Enabled,Disabled' }}</p>
+<h3>Synthesizer</h3>
+<p>{% if query %}{{ query.selected_judge_id }}{% else %}{{ configured_judge_name }}{% endif %}<br><code>{{ configured_judge }}</code></p>
+<details><summary>Credential readiness</summary>{% for provider, ready in credential_readiness.items %}<p>{{ provider }}: {{ ready|yesno:'Configured,Missing' }}</p>{% endfor %}</details>
+<a href="{% url 'chats:evaluations' %}">Manual evaluation cases and results</a>
+{% if not query %}<h3>Saved-run diagnostics</h3>
+{% for run in research_queries %}<p><a href="#research-details-{{ run.pk }}" data-open-research-details>Run {{ forloop.counter }}: attempts, latency, tokens, costs and source validation</a></p>{% empty %}<p>Select a saved chat to inspect its run diagnostics.</p>{% endfor %}
+{% endif %}
+</details>
+{% endif %}

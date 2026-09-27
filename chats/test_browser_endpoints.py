@@ -88,7 +88,7 @@ class ChatBrowserEndpointTests(StaticLiveServerTestCase):
         for model in (ResearchQuery, Message, AgentResponse, Citation, FinalResponse):
             self.assertFalse(model.objects.exists())
         landing = self.session.get(self.live_server_url + "/", timeout=10)
-        self.assertIn("Start a new research question", landing.text)
+        self.assertIn("Ask one question. Get evidence-grounded research", landing.text)
         self.assertNotIn('data-title="Browser target research"', landing.text)
 
     def test_delete_rejects_missing_csrf_and_mismatched_confirmation(self):

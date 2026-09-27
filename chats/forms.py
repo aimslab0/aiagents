@@ -25,7 +25,7 @@ class QuestionForm(forms.Form):
         strip=True,
         widget=forms.Textarea(attrs={
             "class": "form-control question-input",
-            "placeholder": "Ask a follow-up research question...",
+            "placeholder": "Ask a research question...",
             "rows": 2,
             "aria-describedby": "composer-help",
         }),

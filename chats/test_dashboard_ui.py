@@ -49,7 +49,7 @@ class ChatManagementTests(TestCase):
         Citation.objects.create(research_query=self.query, agent_response=agent, title="Citation")
         FinalResponse.objects.create(research_query=self.query, answer="Answer")
         page = self.client.post(reverse("chats:delete", args=[self.chat.pk]), {"confirm_chat": str(self.chat.pk)}, follow=True)
-        self.assertContains(page, "Start a new research question")
+        self.assertContains(page, "Ask one question. Get evidence-grounded research")
         self.assertFalse(ResearchQuery.objects.exists())
         self.assertFalse(Message.objects.exists())
         self.assertFalse(AgentResponse.objects.exists())

@@ -91,6 +91,9 @@ def dashboard_context(chat=None, form=None):
         "free_test_mode": settings.OPENROUTER_FREE_TEST_MODE,
         "configured_models": settings.RESEARCH_PROFILES['balanced'][0] if settings.RESEARCH_MODE == 'deep' and not settings.OPENROUTER_FREE_TEST_MODE else settings.OPENROUTER_MODELS,
         "configured_judge": settings.SYNTHESIZER_MODEL,
+        "configured_judge_name": settings.SYNTHESIZER_MODEL.split("/")[-1].replace("-", " ").title(),
+        "semantic_scholar_enabled": settings.SEMANTIC_SCHOLAR_ENABLED,
+        "semantic_scholar_key_ready": bool(settings.SEMANTIC_SCHOLAR_API_KEY),
     }
 
 

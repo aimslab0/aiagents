@@ -35,7 +35,7 @@ class DashboardTests(TestCase):
 
     def test_welcome_and_no_automatic_chat(self):
         response = self.client.get(reverse("chats:dashboard"))
-        self.assertContains(response, "What would you like")
+        self.assertContains(response, "Thoughtful Higher-Order Research Agent")
         self.assertEqual(Chat.objects.count(), 0)
 
     def test_new_chat_is_post_only_and_selects_created_chat(self):

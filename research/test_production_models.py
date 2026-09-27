@@ -87,4 +87,4 @@ class ProductionWorkflowTests(TestCase):
             for text in ["PRODUCTION MODE", "Latency ms", "Input / output / total tokens", "Cost USD", *[m["id"] for m in paid]]:
                 self.assertContains(page, text)
             self.assertNotContains(page, "FREE TEST MODE")
-            self.assertContains(page, f"Synthesizer: {judge}")
+            self.assertContains(page, f"<code>{judge}</code>")
