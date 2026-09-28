@@ -106,7 +106,7 @@ class TopicPipelineTests(TestCase):
             self.assertEqual(third.model_name, "qwen/qwen3.5-27b")
             self.assertEqual(third.normalized_response["label"], "Planner 3 — Qwen3.5-27B")
             self.assertEqual(third.normalized_response["topic_ideas"], topic_result()["topic_ideas"])
-            self.assertEqual(query.final_response.synthesis_data["model"], "deepseek/deepseek-v4-flash")
+            self.assertEqual(query.final_response.synthesis_data["model"], "qwen/qwen3-max")
             page = self.client.get(reverse("chats:detail", args=[query.chat_id]))
             self.assertContains(page, "Retry Planner 3 — Qwen3.5-27B")
             self.assertNotContains(page, "Retry Claude")

@@ -16,6 +16,7 @@ def select_configuration(mode, judge_key=None):
         models = settings.RESEARCH_PROFILES['balanced'][0]
         judge = options[key]["id"]
     return {"mode": mode, "models": models, "judge_model": judge, "judge_key": key if mode == "deep" else "", "free_test": False,
+            **({"fallback_judge": settings.BALANCED_SYNTHESIZER_FALLBACK} if mode == "balanced" else {}),
             "pipeline": "plan_and_solve"}
 
 
@@ -60,7 +61,7 @@ def allowed_judges(query):
     if selection.get("mode") == "deep":
         return [option["id"] for option in settings.DEEP_SYNTHESIZER_OPTIONS]
     if selection.get("mode") == "balanced":
-        return list(dict.fromkeys([selection["judge_model"], settings.ALTERNATIVE_SYNTHESIZER_MODEL])) if is_plan_and_solve(query) else [selection["judge_model"]]
+        return list(dict.fromkeys([selection["judge_model"], selection.get("fallback_judge", settings.BALANCED_SYNTHESIZER_FALLBACK)]))
     return settings.SYNTHESIZER_MODELS
 
 

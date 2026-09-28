@@ -68,7 +68,7 @@ class FreeConfigurationTests(SimpleTestCase):
                 self.assertEqual([m["id"] for m in module.OPENROUTER_PRODUCTION_MODELS], ["google/gemini-3.5-flash", "meta-llama/llama-4-scout", "qwen/qwen3.5-27b"])
                 expected = list(VERIFIED_FREE_MODELS) if flag == "True" else [m["id"] for m in module.OPENROUTER_PRODUCTION_MODELS]
                 self.assertEqual([m["id"] for m in module.OPENROUTER_MODELS], expected)
-                self.assertEqual(module.SYNTHESIZER_MODEL, VERIFIED_FREE_MODELS[0] if flag == "True" else "deepseek/deepseek-v4-flash")
+                self.assertEqual(module.SYNTHESIZER_MODEL, VERIFIED_FREE_MODELS[0] if flag == "True" else "qwen/qwen3-max")
 
 
 @override_settings(OPENROUTER_API_KEY="free-test-key", CONSENSUS_API_KEY="consensus-test-key",

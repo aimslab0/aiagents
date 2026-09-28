@@ -16,7 +16,7 @@ class ProductionConfigurationTests(SimpleTestCase):
         models, judge = configure_production({})
         self.assertEqual([m["id"] for m in models], ["google/gemini-3.5-flash", "meta-llama/llama-4-scout", "qwen/qwen3.5-27b"])
         self.assertEqual(models[2]["display_label"], "Planner 3 — Qwen3.5-27B")
-        self.assertEqual(judge, "deepseek/deepseek-v4-flash")
+        self.assertEqual(judge, "qwen/qwen3-max")
 
     def test_deep_preserves_previous_configuration_and_supports_overrides(self):
         models, judge = configure_production({"RESEARCH_MODE": "deep"})

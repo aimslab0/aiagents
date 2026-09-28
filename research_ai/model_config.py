@@ -15,7 +15,7 @@ BALANCED_MODEL_DEFAULTS = {
     "GPT": "google/gemini-3.5-flash",
     "Gemini": "meta-llama/llama-4-scout",
     "Claude": "qwen/qwen3.5-27b",
-    "synthesis": "deepseek/deepseek-v4-flash",
+    "synthesis": "qwen/qwen3-max",
 }
 ALTERNATIVE_SYNTHESIZER_DEFAULT = "openai/o4-mini"
 
@@ -53,7 +53,7 @@ def configure_production(environment):
             model_id = environment.get(f"DEEP_{label.upper()}_MODEL", "").strip() or production_model(environment, label)
             models.append({"label": label, "id": model_id})
     choices, default = deep_judges(environment)
-    judge = (environment.get("PRIMARY_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS["synthesis"]) if mode == "balanced" else next(option["id"] for option in choices if option["key"] == default)
+    judge = (environment.get("BALANCED_SYNTHESIZER_PRIMARY", "").strip() or environment.get("PRIMARY_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS["synthesis"]) if mode == "balanced" else next(option["id"] for option in choices if option["key"] == default)
     return models, judge
 
 

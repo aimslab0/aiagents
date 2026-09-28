@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 from django.conf import settings
 from django.db import DatabaseError
@@ -11,7 +12,8 @@ from agents.security import redact
 from .models import FinalResponse, SynthesisAttempt
 from .metrics import ExecutionTimer, select_attempts
 from .preparation import prepare_evidence
-from .execution import retry_call, persistence_guard, touch, LeaseLost
+from .execution import retry_call, persistence_guard, touch, LeaseLost, event
+from agents.budgets import budget_for
 from .support import annotate_support
 from .configuration import selected_judge, allowed_judges
 
@@ -19,10 +21,50 @@ logger = logging.getLogger(__name__)
 
 
 def synthesize_research(query, client=None, model_id=None):
+    selection = query.execution_data.get("selection", {})
+    primary = model_id or selected_judge(query)
+    balanced = (selection.get("mode") == "balanced" and not selection.get("free_test")
+                and not settings.OPENROUTER_FREE_TEST_MODE and primary == settings.BALANCED_SYNTHESIZER_PRIMARY)
+    if balanced:
+        if not budget_for("synthesis")["enabled"]:
+            return None
+        fallback = selection.get("fallback_judge", settings.BALANCED_SYNTHESIZER_FALLBACK)
+        cache, attempts = {}, []
+        reason = None
+        for model in dict.fromkeys([primary, fallback]):
+            final = _synthesize_research(query, client, model, cache)
+            attempt = query.synthesis_attempts.latest("pk")
+            attempts.append(attempt)
+            event(query, "synthesis", attempt)
+            error = attempt.synthesis_data.get("error") or {}
+            if attempt.succeeded or len(attempts) == 2 or not eligible_balanced_failure(error):
+                break
+            reason = error
+        route = {
+            "primary_model": primary, "fallback_model": fallback,
+            "fallback_triggered": len(attempts) > 1, "fallback_reason": reason,
+            "accepted_model": attempts[-1].model_name if attempts[-1].succeeded else None,
+            "attempt_ids": [a.pk for a in attempts],
+            "total_latency_ms": sum(a.latency_ms or 0 for a in attempts),
+            "total_cost_usd": str(sum(a.estimated_cost for a in attempts)) if all(a.estimated_cost is not None for a in attempts) else None,
+        }
+        with persistence_guard(query):
+            for attempt in attempts:
+                attempt.synthesis_data.setdefault("diagnostics", {})["balanced_routing"] = route
+                attempt.save(update_fields=["synthesis_data"])
+            final.synthesis_data.setdefault("diagnostics", {})["balanced_routing"] = route
+            final.save(update_fields=["synthesis_data"])
+        return final
     return retry_call(query, "synthesis", lambda: _synthesize_research(query, client, model_id))
 
 
-def _synthesize_research(query, client=None, model_id=None):
+def eligible_balanced_failure(error):
+    if error.get("code") in {"malformed_response", "truncated_response", "timeout", "connection"}:
+        return True
+    return error.get("code") == "api_error" and (error.get("http_status") is None or error.get("http_status") in {404, 408, 429} or error.get("http_status", 0) >= 500)
+
+
+def _synthesize_research(query, client=None, model_id=None, prepared_cache=None):
     model_id = model_id or selected_judge(query)
     if model_id not in allowed_judges(query):
         raise ValueError("Judge model is not configured.")
@@ -35,7 +77,12 @@ def _synthesize_research(query, client=None, model_id=None):
     logger.info("Synthesis start query_id=%s model=%s", query.pk, redact(model_id))
     try:
         touch(query, "PREPARING_EVIDENCE", "synthesis")
-        prepared = prepare_evidence(query, model_id=model_id)
+        if prepared_cache is not None and "evidence" in prepared_cache:
+            prepared = deepcopy(prepared_cache["evidence"])
+        else:
+            prepared = prepare_evidence(query, model_id=model_id)
+            if prepared_cache is not None:
+                prepared_cache["evidence"] = deepcopy(prepared)
         context = prepared["context"]
         logger.info("Synthesis evidence query_id=%s agents=%s papers=%s", query.pk, len(context["agent_findings"]), len(context["academic_evidence"]))
         if not prepared["usable"]:

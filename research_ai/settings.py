@@ -83,8 +83,10 @@ X_FRAME_OPTIONS = "DENY"
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 PROMPT_ENHANCER_MODEL = os.getenv("PROMPT_ENHANCER_MODEL", "").strip() or "google/gemini-2.5-flash"
-PRIMARY_SYNTHESIZER_MODEL = os.getenv("PRIMARY_SYNTHESIZER_MODEL", "").strip() or BALANCED_MODEL_DEFAULTS['synthesis']
-ALTERNATIVE_SYNTHESIZER_MODEL = os.getenv("ALTERNATIVE_SYNTHESIZER_MODEL", "").strip() or ALTERNATIVE_SYNTHESIZER_DEFAULT
+BALANCED_SYNTHESIZER_PRIMARY = os.getenv("BALANCED_SYNTHESIZER_PRIMARY", "").strip() or BALANCED_MODEL_DEFAULTS['synthesis']
+BALANCED_SYNTHESIZER_FALLBACK = os.getenv("BALANCED_SYNTHESIZER_FALLBACK", "").strip() or ALTERNATIVE_SYNTHESIZER_DEFAULT
+PRIMARY_SYNTHESIZER_MODEL = BALANCED_SYNTHESIZER_PRIMARY
+ALTERNATIVE_SYNTHESIZER_MODEL = BALANCED_SYNTHESIZER_FALLBACK
 SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
 SEMANTIC_SCHOLAR_ENABLED = os.getenv("SEMANTIC_SCHOLAR_ENABLED", "True").lower() in {"true", "1", "yes"}
 SEMANTIC_SCHOLAR_TIMEOUT = float(os.getenv("SEMANTIC_SCHOLAR_TIMEOUT", "30"))
@@ -98,7 +100,7 @@ if not math.isfinite(SEMANTIC_SCHOLAR_TIMEOUT) or SEMANTIC_SCHOLAR_TIMEOUT <= 0 
     raise ImproperlyConfigured("Invalid Semantic Scholar timeout or retry count.")
 if not 1 <= MAX_RETRIEVAL_QUERIES <= 5 or not 1 <= SEMANTIC_SCHOLAR_RESULTS_PER_QUERY <= 100 or not 1 <= CONSENSUS_RESULTS_PER_QUERY <= 20 or not 1 <= SYNTHESIS_MAX_EVIDENCE_ITEMS <= 30 or PLANNER_MAX_TOKENS <= 0:
     raise ImproperlyConfigured("Invalid planning or retrieval limits.")
-OPENROUTER_MODELS, SYNTHESIZER_MODEL = configure_production(os.environ)
+OPENROUTER_MODELS, SYNTHESIZER_MODEL = configure_production({**os.environ, "BALANCED_SYNTHESIZER_PRIMARY": BALANCED_SYNTHESIZER_PRIMARY})
 RESEARCH_MODE = os.getenv("RESEARCH_MODE", "balanced").strip().lower()
 DEEP_SYNTHESIZER_OPTIONS, DEEP_DEFAULT_SYNTHESIZER = deep_judges(os.environ)
 DEEP_SYNTHESIS_BUDGETS = {}
@@ -112,7 +114,7 @@ for judge_key, prefix, defaults in (
     if not 1 <= values['items'] <= 50 or not 100 <= values['abstract_chars'] <= 10000 or not 5000 <= values['context_chars'] <= 200000:
         raise ImproperlyConfigured('Invalid Deep synthesis evidence/context budget.')
     DEEP_SYNTHESIS_BUDGETS[judge_key] = values
-RESEARCH_PROFILES = {mode: configure_production({**os.environ, "RESEARCH_MODE": mode}) for mode in ("balanced", "deep")}
+RESEARCH_PROFILES = {mode: configure_production({**os.environ, "RESEARCH_MODE": mode, "BALANCED_SYNTHESIZER_PRIMARY": BALANCED_SYNTHESIZER_PRIMARY}) for mode in ("balanced", "deep")}
 OPENROUTER_PRODUCTION_MODELS = [dict(model) for model in OPENROUTER_MODELS]
 OPENROUTER_CONNECT_TIMEOUT = float(os.getenv("OPENROUTER_CONNECT_TIMEOUT", "5"))
 OPENROUTER_READ_TIMEOUT = float(os.getenv("OPENROUTER_READ_TIMEOUT", "120"))

@@ -64,6 +64,8 @@ supporting supplied source IDs and limitations. Do not fabricate bibliography en
                 response_format = {'type': 'json_object'}
                 prompt += '\nRequired JSON schema (validated by the application):\n' + json.dumps(schema)
         try:
+            balanced_route = (not context.get('deep_research') and not settings.OPENROUTER_FREE_TEST_MODE
+                              and self.model_id in {settings.BALANCED_SYNTHESIZER_PRIMARY, settings.BALANCED_SYNTHESIZER_FALLBACK})
             response = requests.post(
                 API_URL,
                 headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"},
@@ -71,7 +73,7 @@ supporting supplied source IDs and limitations. Do not fabricate bibliography en
                     "model": self.model_id,
                     "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": serialized}],
                     "response_format": response_format,
-                    "provider": settings.OPENROUTER_PROVIDER_OPTIONS,
+                    "provider": {**settings.OPENROUTER_PROVIDER_OPTIONS, **({"allow_fallbacks": False} if balanced_route else {})},
                     "max_tokens": budget_for("synthesis")["max_tokens"], "stream": False,
                 },
                 timeout=(settings.OPENROUTER_CONNECT_TIMEOUT, budget_for("synthesis")["timeout"]),
@@ -89,6 +91,10 @@ supporting supplied source IDs and limitations. Do not fabricate bibliography en
             except (ValueError, TypeError, RecursionError):
                 body = {}
             if not 200 <= response.status_code < 300:
+                error = body.get("error", {}) if isinstance(body, dict) else {}
+                message = error.get("message", "") if isinstance(error, dict) else ""
+                if balanced_route and response.status_code == 400 and isinstance(message, str) and any(term in message.lower() for term in ("json schema", "json_schema", "response_format")):
+                    raise SynthesisError("malformed_response", status=400)
                 raise SynthesisError("api_error", status=response.status_code)
             if body.get("error"):
                 code = body["error"].get("code") if isinstance(body["error"], dict) else None

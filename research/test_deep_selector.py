@@ -38,13 +38,13 @@ class DeepSelectorTests(TestCase):
     def submit(self, **extra):
         return self.client.post(reverse("chats:submit"), {"question": "Does sleep improve memory?", "research_mode": "deep", **extra})
 
-    def test_balanced_hides_selector_and_defaults_to_deepseek(self):
+    def test_balanced_hides_selector_and_defaults_to_qwen(self):
         page = self.client.get(reverse("chats:dashboard"))
         self.assertContains(page, 'id="deep-synthesizer-control" hidden')
         result = self.client.post(reverse("chats:submit"), {"question": "Does sleep improve memory?", "research_mode": "balanced", "deep_synthesizer": "claude"})
         self.assertEqual(result.status_code, 302)
         query = ResearchQuery.objects.get()
-        self.assertEqual(query.final_response.synthesis_data["model"], "deepseek/deepseek-v4-flash")
+        self.assertEqual(query.final_response.synthesis_data["model"], "qwen/qwen3-max")
         self.assertEqual(query.agent_responses.get(provider_key="claude").model_name, "qwen/qwen3.5-27b")
 
     @override_settings(RESEARCH_MODE="deep")

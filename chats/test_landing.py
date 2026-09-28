@@ -11,7 +11,7 @@ class LandingTests(TestCase):
         html = response.content.decode()
         main = html.split('<main class="main-panel"', 1)[1]
         sidebar = html.split('</aside>', 1)[0]
-        for text in ("THOR", "Thoughtful Higher-Order Research Agent", "Start Research", "Find a research gap", "Develop a thesis topic", "Compare evidence"):
+        for text in ("THOR", "Thoughtful Higher-Order Research Agent", "Start Research", "Find a research gap", "Develop a thesis topic", "Literature Review"):
             self.assertIn(text, main)
         for text in ("Developer Diagnostics", "PRODUCTION MODE", "FREE TEST MODE", "Credential readiness"):
             self.assertNotIn(text, main)

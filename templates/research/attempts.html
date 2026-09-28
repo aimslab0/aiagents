@@ -63,6 +63,11 @@
   </details>
   {% endif %}
   <details class="mt-3"><summary>Developer diagnostics</summary>
+    {% with route=query.final_result.synthesis_data.diagnostics.balanced_routing %}{% if route %}
+      <p>Balanced primary: {{ route.primary_model }}. Fallback: {{ route.fallback_model }}.</p>
+      <p>Fallback triggered: {{ route.fallback_triggered|yesno:'Yes,No' }}. Reason: {{ route.fallback_reason.code|default:'None' }}. Accepted synthesizer: {{ route.accepted_model|default:'No new accepted synthesis' }}.</p>
+      <p>Synthesis routing latency: {{ route.total_latency_ms }} ms. Total routing cost (USD): {{ route.total_cost_usd|default_if_none:'Unknown' }}.</p>
+    {% endif %}{% endwith %}
     {% if query.plan_and_solve %}<h4>Plan-and-Solve diagnostics</h4><p>Generated queries: {{ query.execution_data.hybrid_diagnostics.generated_queries }}; retrieval queries: {{ query.execution_data.hybrid_diagnostics.retrieval_queries }}; duplicates removed: {{ query.execution_data.hybrid_diagnostics.duplicates_removed }}; unique papers: {{ query.execution_data.hybrid_diagnostics.unique_papers }}.</p>{% for provider, counts in query.execution_data.hybrid_diagnostics.providers.items %}<p>{{ provider }}: {{ counts.requests }} requests; {{ counts.results }} results; {{ counts.failed_requests }} failed requests.</p>{% endfor %}<details><summary>Normalized ResearchPlan</summary><dl>{% for key, value in query.execution_data.research_plan.items %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></details>{% endif %}
     {% if query.synthesis_failure %}<p>Synthesis failure: {{ query.synthesis_failure.error.message }} · {{ query.synthesis_failure.error.code }} · {{ query.synthesis_failure.error.category }}{% if query.synthesis_failure.failure_stage %} · {{ query.synthesis_failure.failure_stage }}{% endif %}{% if query.synthesis_failure.error.http_status %} · HTTP {{ query.synthesis_failure.error.http_status }}{% endif %}</p><p>Model: {{ query.synthesis_failure.model }}. Rejected source IDs: {{ query.synthesis_failure.validation.rejected_source_ids|join:', '|default:'None recorded' }}.</p>{% endif %}
     {% if query.execution_data.duration_incomplete %}<p>Interrupted execution: total duration includes completed operations only. Time and charges for an interrupted unsaved request may be unknown.</p>{% endif %}

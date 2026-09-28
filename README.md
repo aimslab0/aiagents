@@ -1,5 +1,23 @@
 # Multi AI Research
 
+## Balanced synthesis reliability
+
+Set `BALANCED_SYNTHESIZER_PRIMARY=qwen/qwen3-max` and
+`BALANCED_SYNTHESIZER_FALLBACK=openai/o4-mini`. These settings take precedence over
+the legacy primary/alternative settings. Both IDs and structured-output support
+were verified in the OpenRouter catalog on 2026-09-28. Qwen3 Max currently lists
+an expiration date of 2026-10-09; review the primary setting before then.
+
+New paid Balanced runs call Qwen once. Invalid JSON/schema output, truncation,
+timeout, connection failures, and provider errors (404, 408, 429, 5xx or an
+unclassified API failure) allow one o4-mini attempt with the same prepared evidence.
+Low confidence, disagreement, invalid source IDs, insufficient evidence, account
+errors, and persistence failures do not trigger fallback. No extra automatic
+synthesis retries occur on this route, even if general retries are configured.
+Deep and free-test routing remain unchanged. Existing attempt history and accepted
+answers are preserved; Developer diagnostics reports routing and combined usage
+cost/latency, with unknown costs remaining unknown.
+
 ## Prompt Enhancer
 
 Click **✨ Enhance Prompt** beside the research input to rewrite an idea into one
